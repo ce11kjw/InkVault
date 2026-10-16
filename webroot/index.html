@@ -224,6 +224,12 @@ footer em{color:var(--accent2);font-style:normal}
       <button class="btn-refresh" onclick="tbRandomIds()">随机设备ID</button>
     </div>
 
+    <div class="section">系统清理</div>
+    <div class="toolbar">
+      <button class="clean-btn light" onclick="tbSysJunk()">清理系统垃圾</button>
+      <button class="clean-btn light" onclick="tbSysDriver()">清理驱动/作弊残留</button>
+    </div>
+
     <div class="section">环境伪装</div>
     <div id="tb-env"></div>
     <div class="toolbar">
@@ -818,6 +824,18 @@ async function tbCheckEnv(){
       row('模拟器特征',r.emulator?'疑似':'无',!r.emulator)+
       row('检测类应用',(r.risky_apps||0)+' 个',!r.risky_apps);
   }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbSysJunk(){
+  toast('正在清理系统垃圾…');
+  try{var out=await execRoot('sh '+MOD_DIR+'/scripts/sysclean.sh junk');
+    var r=tbLastJson(out); toast(r.ok?'系统垃圾清理完成':'失败');
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbSysDriver(){
+  toast('正在清理驱动/作弊残留…');
+  try{var out=await execRoot('sh '+MOD_DIR+'/scripts/sysclean.sh driver');
+    var r=tbLastJson(out); toast(r.ok?('完成，清理 '+(r.removed||0)+' 项'):'失败');
+  }catch(e){toast('出错：'+(e.message||e))}
 }
 document.addEventListener('DOMContentLoaded',function(){});
 </script>

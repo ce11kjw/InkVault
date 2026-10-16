@@ -2,5 +2,5 @@ id=webui_info
 name=墨匣 InkVault
 version=v1.0
 versionCode=100
-author=aplm
-description=游戏清理 + 设备伪装一体化工具（融合 Fish 工具箱 & CITADEL）| WebUI 面板
+author=aplm (based on 呆呆 CITADEL)
+description=游戏清理+设备伪装一体化 | 融合 Fish 工具箱 与 CITADEL(呆呆) | WebUI 面板
