@@ -46,16 +46,15 @@ case "$1" in
     n="${2:-4}"
     cur=$(getprop ro.build.fingerprint)
     [ -f "$BAK" ] || printf '%s\n' "$cur" > "$BAK"
-    # 逐字符替换 n 个小写拉丁字母
-    out=""; i=0; len=${#cur}; cnt=0
-    while [ $i -lt $len ]; do
-      ch=$(printf '%s' "$cur" | cut -c$((i+1)))
-      if [ $cnt -lt "$n" ] && printf '%s' "$ch" | grep -q '^[a-z]$'; then
-        out="$out$(to_greek "$ch")"; cnt=$((cnt+1))
-      else
-        out="$out$ch"
+    # 用 sed 逐个替换 n 个拉丁字母为希腊同形字（避免多字节问题）
+    out="$cur"; cnt=0
+    for pair in a:α b:β c:κ d:δ e:ε f:φ g:γ h:η i:ι j:ι k:κ l:λ m:μ n:ν o:ο p:π q:κ r:ρ s:σ t:τ u:υ v:υ w:ω x:χ y:υ z:ζ; do
+      [ $cnt -ge "$n" ] && break
+      lat=${pair%%:*}; grk=${pair#*:}
+      if printf '%s' "$out" | grep -q "$lat"; then
+        out=$(printf '%s' "$out" | sed "s/$lat/$grk/")
+        cnt=$((cnt+1))
       fi
-      i=$((i+1))
     done
     setprop_ro ro.build.fingerprint "$out"
     sleep 1

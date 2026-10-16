@@ -18,6 +18,14 @@ sleep 5
 
 log "===== 开机服务启动 ====="
 
+# 准备融合工具目录
+mkdir -p /data/adb/fusion 2>/dev/null
+chmod 755 "$MODDIR/scripts/"*.sh 2>/dev/null
+
+# 重应用 BL 伪装（每次开机）
+sh "$MODDIR/scripts/envhide.sh" hide-bl >/dev/null 2>&1
+log "BL 伪装已重应用"
+
 chmod +x "$MODDIR/scripts/"*.sh 2>/dev/null
 
 # 1. 应用机型伪装（如果有保存）

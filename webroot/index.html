@@ -158,6 +158,7 @@ footer em{color:var(--accent2);font-style:normal}
   <button class="tab" onclick="switchTab('apps',this)">SSAID 管理</button>
   <button class="tab" onclick="switchTab('spoof',this)">机型伪装</button>
   <button class="tab" onclick="switchTab('clean',this)">缓存清理</button>
+  <button class="tab" onclick="switchTab('toolbox',this)">工具箱</button>
   <button class="tab" onclick="switchTab('about',this)">关于我们</button>
 </div>
 
@@ -201,6 +202,33 @@ footer em{color:var(--accent2);font-style:normal}
     <div class="section">自动清理设置</div>
     <div id="settings-body">
       <div class="loader"><div class="spin"></div>读取设置中…</div>
+    </div>
+  </div>
+
+
+  <!-- 工具箱（融合 Fish） -->
+  <div class="panel" id="panel-toolbox">
+    <div class="section">游戏缓存清理</div>
+    <div class="toolbar">
+      <button class="clean-btn light" onclick="tbCleanAll('light')">全部轻度清理</button>
+      <button class="clean-btn deep" onclick="tbCleanAll('deep')">全部深度清理</button>
+      <button class="btn-refresh" onclick="tbLoadGames()">刷新</button>
+    </div>
+    <div id="tb-games"><div class="loader"><div class="spin"></div>读取游戏列表…</div></div>
+
+    <div class="section">设备指纹</div>
+    <div id="tb-fp"><div class="loader"><div class="spin"></div>读取指纹…</div></div>
+    <div class="toolbar">
+      <button class="clean-btn light" onclick="tbFpSpoof()">伪装指纹</button>
+      <button class="clean-btn light" onclick="tbFpRestore()">恢复指纹</button>
+      <button class="btn-refresh" onclick="tbRandomIds()">随机设备ID</button>
+    </div>
+
+    <div class="section">环境伪装</div>
+    <div id="tb-env"></div>
+    <div class="toolbar">
+      <button class="clean-btn light" onclick="tbHideBl()">隐藏 BL</button>
+      <button class="btn-refresh" onclick="tbCheckEnv()">安全检测</button>
     </div>
   </div>
 
@@ -287,6 +315,7 @@ function switchTab(name,btn){
   if(name==='apps'&&allApps.length===0)loadApps();
   if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
   if(name==='clean')loadSettings();
+  if(name==='toolbox'){tbLoadGames();tbLoadFp();}
   window.scrollTo(0,0);
 }
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
@@ -687,6 +716,100 @@ setTimeout(popupNotice,300);
 document.getElementById('modal-mask').addEventListener('click',function(e){
   if(e.target===this)closeModal();
 });
+
+/* ========= 工具箱（融合 Fish） ========= */
+function tbEsc(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+async function tbLoadGames(){
+  const box=document.getElementById('tb-games');
+  box.innerHTML='<div class="loader"><div class="spin"></div>读取游戏列表…</div>';
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh list');
+    let arr=[];try{arr=JSON.parse(out.trim())}catch(e){}
+    if(!arr.length){box.innerHTML='<div class="empty-msg">无游戏数据</div>';return}
+    let h='';
+    arr.forEach(function(g){
+      h+='<div class="cell wide" style="margin-bottom:8px"><div class="cell-label">'+tbEsc(g.name)+' · '+tbEsc(g.pkg)+'</div>'+
+         '<div class="toolbar" style="margin:8px 0 0">'+
+         (g.installed
+           ? '<button class="clean-btn light" onclick="tbClean(\''+g.id+'\',\'light\')">轻度</button>'+
+             '<button class="clean-btn deep" onclick="tbClean(\''+g.id+'\',\'deep\')">深度</button>'
+           : '<span class="cell-val warn">未安装</span>')+
+         '</div></div>';
+    });
+    box.innerHTML=h;
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbClean(id,mode){
+  toast('正在'+(mode==='deep'?'深度':'轻度')+'清理…');
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh clean '+id+' '+mode);
+    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    if(r.ok){toast(r.game+' 清理完成，释放 '+(r.freed_kb||0)+' KB')}
+    else{toast('清理失败：'+(r.error||'未知'))}
+  }catch(e){toast('执行出错：'+(e.message||e))}
+}
+async function tbCleanAll(mode){
+  toast('正在清理全部已安装游戏…');
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh cleanall '+mode);
+    const lines=out.trim().split('\n').filter(function(x){return x.indexOf('"ok":true')>=0});
+    toast('完成，清理了 '+lines.length+' 个游戏');
+  }catch(e){toast('执行出错：'+(e.message||e))}
+}
+async function tbLoadFp(){
+  const box=document.getElementById('tb-fp');
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh status');
+    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    box.innerHTML='<div class="cell wide"><div class="cell-label">当前指纹</div><div class="cell-val">'+tbEsc(r.fingerprint||'—')+'</div></div>'+
+      '<div class="cell wide" style="margin-top:8px"><div class="cell-label">设备序列号</div><div class="cell-val">'+tbEsc(r.serial||'—')+'</div>'+
+      '<div class="cell-val '+(r.has_backup?'ok':'warn')+'" style="margin-top:4px">备份：'+(r.has_backup?'已有':'无')+' · resetprop：'+tbEsc(r.resetprop||'无')+'</div></div>';
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbFpSpoof(){
+  const n=prompt('替换的字母数量（推荐 3-6）：','4');if(n===null)return;
+  toast('正在伪装指纹…');
+  try{const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh spoof '+n);
+    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    toast(r.applied?'指纹已伪装成功':'已写入，可能需重启生效');tbLoadFp();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbFpRestore(){
+  toast('正在恢复指纹…');
+  try{await execRoot('sh '+MOD_DIR+'/scripts/fp.sh restore');toast('已恢复');tbLoadFp()}
+  catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbRandomIds(){
+  toast('正在随机化设备ID…');
+  try{const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh random-ids');
+    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    toast(r.ok?('已改：'+r.serial):'失败');tbLoadFp();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbHideBl(){
+  toast('正在伪装 BL 状态…');
+  try{const out=await execRoot('sh '+MOD_DIR+'/scripts/envhide.sh hide-bl');
+    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    toast('已应用 '+ (r.applied||0) +' 条，重启后需重跑');
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbCheckEnv(){
+  const box=document.getElementById('tb-env');
+  box.innerHTML='<div class="loader"><div class="spin"></div>检测中…</div>';
+  try{const out=await execRoot('sh '+MOD_DIR+'/scripts/envhide.sh check');
+    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    function row(k,v,ok){return '<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">'+k+'</div><div class="cell-val '+(ok?'ok':'warn')+'">'+tbEsc(v)+'</div></div>'}
+    box.innerHTML=row('Bootloader 状态',r.bootloader,r.bootloader==='green')+
+      row('Flash 锁定',r.flash_locked,r.flash_locked==='1')+
+      row('SELinux',r.selinux,r.selinux==='Enforcing')+
+      row('Root 痕迹',r.root?'存在':'无',!r.root)+
+      row('Frida 痕迹',r.frida?'存在':'无',!r.frida)+
+      row('Xposed 痕迹',r.xposed?'存在':'无',!r.xposed)+
+      row('模拟器特征',r.emulator?'疑似':'无',!r.emulator)+
+      row('检测类应用',(r.risky_apps||0)+' 个',!r.risky_apps);
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+document.addEventListener('DOMContentLoaded',function(){});
 </script>
 </body>
 </html>
