@@ -10,12 +10,9 @@ junk_clean(){
   for d in /data/cache /cache /data/anr /data/tombstones /data/system/dropbox; do
     [ -d "$d" ] && rm -rf "$d"/* 2>/dev/null
   done
-  find /data/local/tmp -mindepth 1 -maxdepth 1 2>/dev/null | while read -r f; do
-    bn=$(basename "$f")
-    case "$bn" in
-      fusion_*|webui_*|frida*) : ;;
-      *) rm -rf "$f" 2>/dev/null ;;
-    esac
+  # /data/local/tmp：只删明确的临时垃圾，绝不碰其他模块的文件
+  for pat in '*.tmp' '*.temp' '*.log.old' '*.pid'; do
+    find /data/local/tmp -maxdepth 1 -name "$pat" -delete 2>/dev/null
   done
   for dl in /storage/emulated/*/Download; do
     [ -d "$dl" ] || continue

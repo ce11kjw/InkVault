@@ -19,13 +19,14 @@ clean_one(){
   [ -z "$line" ] && { echo "{\"ok\":false,\"error\":\"unknown game\"}"; return 1; }
   name=$(echo "$line" | cut -d'|' -f2)
   pkg=$(echo "$line" | cut -d'|' -f3)
-  subs=$(echo "$line" | cut -d'|' -f4- | tr '|' ' ')
+  subs=$(echo "$line" | cut -d'|' -f4- | tr '|' '\n')
   installed "$pkg" || { echo "{\"ok\":false,\"game\":\"$name\",\"error\":\"未安装\"}"; return 1; }
   before=$(du -sk /data/user/*/"$pkg" 2>/dev/null | awk '{s+=$1}END{print s+0}')
   # 内部数据 /data/user/*/<pkg>/<sub>
   for u in /data/user/*/; do
     u="${u%/}"
-    for s in $subs; do
+    printf '%s\n' "$subs" | while IFS= read -r s; do
+      [ -z "$s" ] && continue
       case "$s" in *UE4Game*|*Saved*) [ "$mode" = "light" ] && continue;; esac
       [ -e "$u/$pkg/$s" ] && rm -rf "$u/$pkg/$s" 2>/dev/null
     done
@@ -39,7 +40,7 @@ clean_one(){
       else
         if [ -d "$ext/files" ]; then
           find "$ext/files" -mindepth 1 -maxdepth 1 2>/dev/null | while read -r f; do
-            echo "$(basename "$f")" | grep -qE "$KEEP" || rm -rf "$f" 2>/dev/null
+            if ! printf '%s' "$(basename "$f")" | grep -qE "$KEEP"; then rm -rf "$f" 2>/dev/null; fi
           done
         fi
         rm -rf "$ext/cache" "$ext/code_cache" 2>/dev/null
