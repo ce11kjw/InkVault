@@ -1,0 +1,54 @@
+#!/system/bin/sh
+# 模块开机服务
+# 作者: 呆呆 | QQ:891354018 | 群:774886621
+
+MODDIR="${0%/*}"
+LOGFILE="/data/local/tmp/webui_service.log"
+SETTINGS_FILE="$MODDIR/settings.conf"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOGFILE"
+}
+
+# 等待开机完成
+until [ "$(getprop sys.boot_completed)" = "1" ]; do
+    sleep 2
+done
+sleep 5
+
+log "===== 开机服务启动 ====="
+
+chmod +x "$MODDIR/scripts/"*.sh 2>/dev/null
+
+# 1. 应用机型伪装（如果有保存）
+log "执行机型伪装恢复"
+sh "$MODDIR/scripts/spoof.sh" boot_apply >/dev/null 2>&1
+
+# 2. 优化 inotify 参数
+log "优化 inotify 参数"
+sh "$MODDIR/scripts/cleaner.sh" inotify >/dev/null 2>&1
+
+# 3. 开机自动清理（如果开启）
+get_setting() {
+    grep "^$1=" "$SETTINGS_FILE" 2>/dev/null | head -1 | cut -d'=' -f2-
+}
+
+# 默认开机自动清理是开启的
+BOOT_CLEAN=$(get_setting auto_clean_on_boot)
+[ -z "$BOOT_CLEAN" ] && BOOT_CLEAN=1
+
+if [ "$BOOT_CLEAN" = "1" ]; then
+    MODE=$(get_setting clean_mode)
+    log "开机自动清理（模式: ${MODE:-deep}）"
+    sh "$MODDIR/scripts/cleaner.sh" "${MODE:-deep}" >/dev/null 2>&1
+fi
+
+# 4. 启动进程监听服务（如果有任意一个自动清理开关开启）
+START_EN=$(get_setting auto_clean_on_codev_start)
+STOP_EN=$(get_setting auto_clean_on_codev_stop)
+if [ "$START_EN" = "1" ] || [ "$STOP_EN" = "1" ]; then
+    log "启动进程监听服务"
+    sh "$MODDIR/scripts/monitor.sh" start &
+fi
+
+log "===== 开机服务初始化完成 ====="

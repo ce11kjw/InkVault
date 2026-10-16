@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>CITADEL</title>
+<style>
+:root{--bg:#0a0a0f;--surf:#111118;--card:#16161f;--border:#232330;--accent:#5b8af0;--accent2:#a78bfa;--green:#34d399;--orange:#fb923c;--red:#f87171;--text:#e2e2f0;--muted:#55556a;--mono:'JetBrains Mono','Courier New',monospace;--sans:'PingFang SC','Noto Sans SC',-apple-system,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);padding-top:2vh}
+.topbar{position:sticky;top:0;z-index:200;background:rgba(10,10,15,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.topbar-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:.5px}
+.topbar-title{font-size:15px;font-weight:700;letter-spacing:1px}
+.topbar-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.topbar-author{margin-left:auto;font-size:10px;color:var(--muted);font-family:var(--mono);background:var(--card);border:1px solid var(--border);border-radius:20px;padding:3px 10px;white-space:nowrap}
+.topbar-author em{color:var(--accent);font-style:normal}
+.tabbar{position:sticky;top:54px;z-index:100;background:var(--surf);border-bottom:1px solid var(--border);display:flex;padding:0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabbar::-webkit-scrollbar{display:none}
+.tab{padding:10px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:var(--sans);font-size:13px;cursor:pointer;letter-spacing:.3px;white-space:nowrap;flex-shrink:0}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.page{padding:14px;max-width:720px;margin:0 auto}
+.panel{display:none}.panel.on{display:block}
+.loader{display:flex;align-items:center;justify-content:center;gap:10px;padding:50px 0;color:var(--muted);font-size:13px}
+.spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err-msg{color:var(--red);font-size:13px;font-family:var(--mono);text-align:center;line-height:1.8;padding:0 16px}
+.empty-msg{color:var(--muted);font-size:13px;text-align:center;padding:40px 16px;line-height:1.8}
+.empty-msg em{color:var(--accent2);font-style:normal}
+.section{font-size:10px;letter-spacing:3px;color:var(--accent2);text-transform:uppercase;margin:22px 0 8px;display:flex;align-items:center;gap:8px}
+.section::after{content:'';flex:1;height:1px;background:var(--border)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:420px){.grid{grid-template-columns:1fr}}
+.cell{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.cell.wide{grid-column:1/-1}
+.cell-label{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px}
+.cell-val{font-size:13px;font-family:var(--mono);word-break:break-all;line-height:1.4}
+.cell-val.hi{color:var(--accent)}.cell-val.ok{color:var(--green)}.cell-val.warn{color:var(--orange)}
+.bat-bar{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.bat-fill{height:100%;border-radius:2px;transition:width .5s}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.count{font-size:11px;color:var(--muted);font-family:var(--mono);flex:1}
+.btn-refresh{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 14px;color:var(--text);font-family:var(--sans);font-size:12px;cursor:pointer}
+
+/* SSAID 卡片 */
+.app-list{display:flex;flex-direction:column;gap:8px}
+.app-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.app-head{display:flex;align-items:center;gap:12px}
+.app-icon{width:54px;height:54px;border-radius:13px;flex-shrink:0;background:var(--surf);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:11px;color:var(--muted)}
+.app-icon img{width:100%;height:100%;object-fit:cover;display:block}
+.app-info{flex:1;min-width:0}
+.app-label{font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px}
+.app-pkg{font-size:11px;color:var(--muted);font-family:var(--mono);word-break:break-all;line-height:1.3}
+.app-ver{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.ssaid-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ssaid-tag{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:3px 7px;flex-shrink:0}
+.ssaid-val{font-size:12px;font-family:var(--mono);color:var(--accent);background:rgba(91,138,240,.08);border:1px solid rgba(91,138,240,.18);border-radius:5px;padding:4px 9px;flex:1;min-width:0;word-break:break-all;transition:all .3s}
+.ssaid-val.unassigned{color:var(--muted);background:var(--surf);border-color:var(--border);font-style:italic}
+.ssaid-val.loading-val{color:var(--muted);font-style:italic}
+.ssaid-val.changed{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.3);color:var(--green)}
+.ssaid-val.fail{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3);color:var(--red)}
+.btn-group{display:flex;gap:6px;flex-shrink:0}
+.btn{border:1px solid var(--border);border-radius:6px;background:none;color:var(--muted);font-family:var(--mono);font-size:11px;padding:4px 12px;cursor:pointer;white-space:nowrap}
+.btn.busy{opacity:.45;pointer-events:none}
+
+/* 机型伪装 */
+.spoof-status{background:linear-gradient(135deg,rgba(91,138,240,.12),rgba(167,139,250,.06));border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px;text-align:center}
+.spoof-status.active{border-color:rgba(52,211,153,.4);background:linear-gradient(135deg,rgba(52,211,153,.1),rgba(52,211,153,.03))}
+.spoof-status-tag{font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.spoof-status.active .spoof-status-tag{color:var(--green)}
+.spoof-status-name{font-size:18px;font-weight:700;letter-spacing:1px;margin-bottom:4px}
+.spoof-status-detail{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.spoof-cat-title{font-size:11px;letter-spacing:2px;color:var(--accent2);text-transform:uppercase;margin:18px 0 8px}
+.spoof-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:420px){.spoof-list{grid-template-columns:1fr}}
+.spoof-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;transition:all .15s}
+.spoof-item:active{transform:scale(.97)}
+.spoof-item.current{border-color:var(--accent);background:rgba(91,138,240,.06)}
+.spoof-item.restore{border-color:var(--orange);background:rgba(251,146,60,.05)}
+.spoof-item-name{font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px}
+.spoof-item-id{font-size:10px;color:var(--muted);font-family:var(--mono)}
+
+/* 缓存清理 */
+.clean-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px}
+.clean-title{font-size:14px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.clean-desc{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:14px}
+.clean-actions{display:flex;gap:8px;flex-wrap:wrap}
+.clean-btn{flex:1;min-width:100px;padding:11px;border-radius:10px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;border:none;letter-spacing:.5px;transition:opacity .2s}
+.clean-btn.deep{background:linear-gradient(135deg,var(--red),var(--orange));color:#fff}
+.clean-btn.light{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.clean-btn:active{opacity:.85}
+.clean-btn.busy{opacity:.5;pointer-events:none}
+
+/* 设置开关 */
+.toggle-row{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.toggle-info{flex:1;min-width:0}
+.toggle-label{font-size:13px;font-weight:500;margin-bottom:3px}
+.toggle-desc{font-size:11px;color:var(--muted);line-height:1.5}
+.toggle-switch{position:relative;width:44px;height:24px;background:var(--border);border-radius:12px;flex-shrink:0;cursor:pointer;transition:background .2s}
+.toggle-switch.on{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.toggle-switch.on::after{transform:translateX(20px)}
+
+/* 关于我们 */
+.about-hero{background:linear-gradient(135deg,rgba(91,138,240,.1),rgba(167,139,250,.06));border:1px solid var(--border);border-radius:14px;padding:24px 18px;text-align:center;margin-bottom:14px}
+.about-logo{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;letter-spacing:1px}
+.about-name{font-size:18px;font-weight:700;letter-spacing:2px;margin-bottom:4px}
+.about-ver{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.about-block{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px}
+.about-title{font-size:11px;letter-spacing:3px;color:var(--accent2);text-transform:uppercase;margin-bottom:10px}
+.about-text{font-size:13px;line-height:1.85;color:var(--text)}
+.about-info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.about-info-row:last-child{border-bottom:none}
+.about-info-row .k{color:var(--muted);font-size:12px}
+.about-info-row .v{color:var(--text);font-family:var(--mono);font-size:12px}
+.about-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;padding:12px;color:#fff;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;transition:opacity .2s}
+.about-btn:active{opacity:.85}
+.about-disclaimer{font-size:12px;color:var(--muted);line-height:1.85}
+.about-disclaimer em{color:var(--orange);font-style:normal;font-weight:600}
+.about-disclaimer p{margin-bottom:8px}
+.about-disclaimer p:last-child{margin-bottom:0}
+
+/* 公告弹窗 */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:9000;display:none;align-items:center;justify-content:center;padding:20px;animation:fadeIn .25s}
+.modal-mask.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal{background:linear-gradient(180deg,var(--card),var(--surf));border:1px solid var(--border);border-radius:16px;max-width:480px;width:100%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;animation:slideUp .3s;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,rgba(91,138,240,.08),transparent)}
+.modal-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#fff;font-weight:700;letter-spacing:.5px}
+.modal-title{font-size:16px;font-weight:700;letter-spacing:1px}
+.modal-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;letter-spacing:1px;text-transform:uppercase}
+.modal-body{padding:20px;overflow-y:auto;flex:1;font-size:13px;line-height:1.85;color:var(--text);white-space:pre-wrap;word-break:break-word;font-family:var(--sans)}
+.modal-body.loading{padding:40px 20px;text-align:center;color:var(--muted);white-space:normal}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px}
+.modal-btn{flex:1;padding:11px;border-radius:8px;font-family:var(--sans);font-size:13px;cursor:pointer;letter-spacing:1px;transition:all .15s;border:1px solid var(--border);background:var(--surf);color:var(--text)}
+.modal-btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-weight:600}
+.modal-btn:active{opacity:.85}
+
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:20px;padding:8px 18px;font-size:12px;font-family:var(--mono);color:var(--text);opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;z-index:9999;max-width:90%;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+footer{text-align:center;padding:28px 16px 10px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+footer em{color:var(--accent2);font-style:normal}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-icon">CT</div>
+  <div>
+    <div class="topbar-title">CITADEL Menu</div>
+    <div class="topbar-sub">KernelSU Module · 呆呆工作室</div>
+  </div>
+  <div class="topbar-author">QQ <em>891354018</em></div>
+</div>
+
+<div class="tabbar">
+  <button class="tab on" onclick="switchTab('sys',this)">系统信息</button>
+  <button class="tab" onclick="switchTab('apps',this)">SSAID 管理</button>
+  <button class="tab" onclick="switchTab('spoof',this)">机型伪装</button>
+  <button class="tab" onclick="switchTab('clean',this)">缓存清理</button>
+  <button class="tab" onclick="switchTab('about',this)">关于我们</button>
+</div>
+
+<div class="page">
+
+  <!-- 系统信息 -->
+  <div class="panel on" id="panel-sys">
+    <div class="loader" id="sys-loader"><div class="spin"></div>读取系统信息中…</div>
+    <div id="sys-body" style="display:none"></div>
+  </div>
+
+  <!-- SSAID 管理 -->
+  <div class="panel" id="panel-apps">
+    <div class="loader" id="app-loader"><div class="spin"></div>扫描已安装游戏中…</div>
+    <div id="app-body" style="display:none">
+      <div class="toolbar">
+        <span class="count" id="app-count"></span>
+        <button class="btn-refresh" onclick="loadApps()">刷新</button>
+      </div>
+      <div class="app-list" id="app-list"></div>
+    </div>
+  </div>
+
+  <!-- 机型伪装 -->
+  <div class="panel" id="panel-spoof">
+    <div class="loader" id="spoof-loader"><div class="spin"></div>读取预设中…</div>
+    <div id="spoof-body" style="display:none"></div>
+  </div>
+
+  <!-- 缓存清理 -->
+  <div class="panel" id="panel-clean">
+    <div class="clean-card">
+      <div class="clean-title">无畏契约 · 深度清理</div>
+      <div class="clean-desc">封号清理 + 自动改 SSAID + 保留版本凭据，避免重新下载完整包。建议在游戏关闭时执行。</div>
+      <div class="clean-actions">
+        <button class="clean-btn deep" id="btn-deep" onclick="runClean('deep')">深度清理</button>
+        <button class="clean-btn light" id="btn-light" onclick="runClean('light')">轻度清理</button>
+      </div>
+    </div>
+
+    <div class="section">自动清理设置</div>
+    <div id="settings-body">
+      <div class="loader"><div class="spin"></div>读取设置中…</div>
+    </div>
+  </div>
+
+  <!-- 关于我们 -->
+  <div class="panel" id="panel-about">
+    <div class="about-hero">
+      <div class="about-logo">CT</div>
+      <div class="about-name">CITADEL Menu</div>
+      <div class="about-ver">KernelSU WebUI Module</div>
+    </div>
+
+    <div class="about-block">
+      <div class="about-title">作者信息</div>
+      <div class="about-info-row"><span class="k">作者</span><span class="v">呆呆</span></div>
+      <div class="about-info-row"><span class="k">作者 QQ</span><span class="v">891354018</span></div>
+      <div class="about-info-row"><span class="k">交流群</span><span class="v">774886621</span></div>
+      <div class="about-info-row"><span class="k">工作室</span><span class="v">呆呆工作室</span></div>
+    </div>
+
+    <div class="about-block">
+      <div class="about-title">免责声明</div>
+      <div class="about-disclaimer">
+        <p>1. 本模块为 <em>免费工具</em>，仅供学习交流使用。任何商业用途请联系作者授权。</p>
+        <p>2. 使用本模块产生的<em>任何后果由用户自行承担</em>，包括但不限于账号封禁、设备异常、数据丢失等。</p>
+        <p>3. 本模块所有功能<em>不针对任何特定平台或服务</em>，仅提供系统级信息查询与本地数据管理能力。</p>
+        <p>4. 严禁将本模块用于<em>违法违规</em>行为，开发者不承担因不当使用产生的法律责任。</p>
+        <p>5. 本模块<em>不收集、不上传</em>任何用户数据，所有操作均在本地完成。</p>
+        <p>6. 如不同意以上条款，请立即停止使用并卸载本模块。</p>
+      </div>
+    </div>
+
+    <div class="about-block">
+      <div class="about-title">查看公告</div>
+      <button class="about-btn" onclick="popupNotice()" style="margin-bottom:10px;background:var(--surf);border:1px solid var(--border);color:var(--text)">查看官方公告</button>
+    </div>
+
+    <div class="about-block">
+      <div class="about-title">加入交流</div>
+      <div class="about-disclaimer" style="margin-bottom:14px">加入官方交流群获取最新版本、使用教程、问题反馈与互助交流。</div>
+      <button class="about-btn" onclick="joinQQGroup()">加入 QQ 交流群</button>
+    </div>
+  </div>
+
+</div>
+
+<footer>CITADEL Info Panel · 作者: <em>呆呆</em> · QQ <em>891354018</em> · 群 <em>774886621</em></footer>
+
+<!-- 公告弹窗 -->
+<div class="modal-mask" id="modal-mask">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon">CT</div>
+      <div>
+        <div class="modal-title">官方公告</div>
+        <div class="modal-sub">CITADEL Notice</div>
+      </div>
+    </div>
+    <div class="modal-body loading" id="modal-body">
+      <div class="spin" style="margin:0 auto 10px"></div>正在拉取公告…
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn primary" onclick="closeModal()">我已阅读</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let allApps=[];
+let spoofPresets=[];
+let currentSpoof=null;
+let userSettings={};
+const MOD_DIR='/data/adb/modules/webui_info';
+const NOTICE_URL='https://gitee.com/island-style/daoshi/raw/master/%E5%85%AC%E5%91%8A.txt';
+const QQ_GROUP_URL='https://qm.qq.com/q/wirF6nC2wU';
+
+function toast(msg,dur){dur=dur||2500;const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(function(){el.classList.remove('show')},dur)}
+function switchTab(name,btn){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on')});
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('on')});
+  btn.classList.add('on');
+  document.getElementById('panel-'+name).classList.add('on');
+  if(name==='apps'&&allApps.length===0)loadApps();
+  if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
+  if(name==='clean')loadSettings();
+  window.scrollTo(0,0);
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function escA(s){return String(s==null?'':s).replace(/'/g,"\\'")}
+
+async function execRoot(cmd){
+  if(typeof ksu!=='undefined'&&ksu.exec){
+    return new Promise(function(resolve,reject){
+      try{
+        const result=ksu.exec(cmd);
+        if(result&&typeof result.then==='function'){
+          result.then(function(r){resolve(typeof r==='string'?r:(r.stdout||''))},reject);
+        }else if(typeof result==='string'){
+          resolve(result);
+        }else if(result&&result.stdout!==undefined){
+          resolve(result.stdout);
+        }else{
+          resolve(String(result||''));
+        }
+      }catch(e){reject(e)}
+    });
+  }
+  if(typeof $APATCH!=='undefined'&&$APATCH.exec){
+    return new Promise(function(resolve,reject){
+      try{resolve($APATCH.exec(cmd))}catch(e){reject(e)}
+    });
+  }
+  if(typeof ksu!=='undefined'&&ksu.spawn){
+    return new Promise(function(resolve,reject){
+      let out='';
+      const child=ksu.spawn('sh',['-c',cmd]);
+      child.stdout.on('data',function(d){out+=d});
+      child.on('exit',function(){resolve(out)});
+      child.on('error',reject);
+    });
+  }
+  throw new Error('未检测到 KernelSU/Suki/APatch WebUI 环境');
+}
+
+/* ========= 公告 ========= */
+let noticeLoaded=false;
+let noticeContent='';
+
+async function fetchNotice(){
+  try{
+    const r=await fetch(NOTICE_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(r.ok){const txt=await r.text();if(txt)return txt}
+  }catch(e){}
+  try{
+    const out=await execRoot('curl -sL --max-time 8 "'+NOTICE_URL+'" 2>/dev/null || wget -qO- --timeout=8 "'+NOTICE_URL+'" 2>/dev/null');
+    if(out&&out.trim())return out.trim();
+  }catch(e){}
+  throw new Error('无法获取公告，请检查网络');
+}
+
+async function loadNoticeContent(force){
+  const modalBody=document.getElementById('modal-body');
+  if(!force&&noticeLoaded&&noticeContent){
+    modalBody.textContent=noticeContent;
+    modalBody.classList.remove('loading');
+    return;
+  }
+  modalBody.innerHTML='<div class="spin" style="margin:0 auto 10px"></div>正在拉取公告…';
+  modalBody.classList.add('loading');
+  try{
+    let txt=await fetchNotice();
+    txt=txt.replace(/\\n/g,'\n').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\u2028|\u2029|\u0085/g,'\n').trim();
+    noticeContent=txt;noticeLoaded=true;
+    modalBody.textContent=txt;
+    modalBody.classList.remove('loading');
+  }catch(e){
+    modalBody.innerHTML='<span class="err-msg">加载失败<br>'+esc(e.message||e)+'</span>';
+    modalBody.classList.add('loading');
+  }
+}
+
+function popupNotice(){
+  document.getElementById('modal-mask').classList.add('show');
+  loadNoticeContent(false);
+}
+function closeModal(){document.getElementById('modal-mask').classList.remove('show')}
+
+/* ========= 加群 ========= */
+async function joinQQGroup(){
+  toast('正在打开浏览器…');
+  try{
+    await execRoot('am start -a android.intent.action.VIEW -d "'+QQ_GROUP_URL+'"');
+    setTimeout(function(){toast('已跳转到浏览器')},800);
+  }catch(e){
+    if(navigator.clipboard){
+      try{await navigator.clipboard.writeText(QQ_GROUP_URL);toast('打开失败，链接已复制')}
+      catch(err){toast('请手动复制：'+QQ_GROUP_URL)}
+    }
+  }
+}
+
+/* ========= 系统信息 ========= */
+async function loadSys(){
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/sysinfo.sh');
+    const json=out.trim();
+    if(!json)throw new Error('脚本无输出');
+    const d=JSON.parse(json);
+    renderSys(d);
+  }catch(e){
+    document.getElementById('sys-loader').innerHTML='<span class="err-msg">读取失败<br>'+esc(e.message||e)+'</span>';
+  }
+}
+
+function renderSys(d){
+  const bat=parseInt(d.battery)||0;
+  const batClr=bat>50?'var(--green)':bat>20?'var(--orange)':'var(--red)';
+  const uptH=Math.floor((d.uptime||0)/3600);
+  const uptM=Math.floor(((d.uptime||0)%3600)/60);
+  const ramG=((d.ram_mb||0)/1024).toFixed(1);
+  document.getElementById('sys-body').innerHTML=
+    '<div class="section">设备基本信息</div><div class="grid">'+
+    '<div class="cell"><div class="cell-label">设备型号</div><div class="cell-val hi">'+esc(d.device||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">品牌 / 厂商</div><div class="cell-val">'+esc(d.brand||'—')+' · '+esc(d.manufacturer||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">Android 版本</div><div class="cell-val ok">Android '+esc(d.android||'—')+' (SDK '+esc(d.sdk||'—')+')</div></div>'+
+    '<div class="cell"><div class="cell-label">内核版本</div><div class="cell-val">'+esc(d.kernel||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">CPU 架构</div><div class="cell-val">'+esc(d.cpu_abi||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">硬件 / 主板</div><div class="cell-val">'+esc(d.hardware||'—')+' · '+esc(d.board||'—')+'</div></div>'+
+    '</div><div class="section">构建信息</div><div class="grid">'+
+    '<div class="cell"><div class="cell-label">Build ID</div><div class="cell-val hi">'+esc(d.build_id||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">安全补丁</div><div class="cell-val">'+esc(d.security_patch||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">构建日期</div><div class="cell-val">'+esc(d.build_date||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">Bootloader</div><div class="cell-val">'+esc(d.bootloader||'—')+'</div></div>'+
+    '<div class="cell wide"><div class="cell-label">设备指纹</div><div class="cell-val" style="font-size:11px">'+esc(d.fingerprint||'—')+'</div></div>'+
+    '</div><div class="section">运行状态</div><div class="grid">'+
+    '<div class="cell"><div class="cell-label">电量</div><div class="cell-val" style="color:'+batClr+'">'+bat+'%</div><div class="bat-bar"><div class="bat-fill" style="width:'+bat+'%;background:'+batClr+'"></div></div></div>'+
+    '<div class="cell"><div class="cell-label">运行时长</div><div class="cell-val ok">'+uptH+'h '+uptM+'m</div></div>'+
+    '<div class="cell"><div class="cell-label">总运行内存</div><div class="cell-val">'+ramG+' GB</div></div>'+
+    '<div class="cell"><div class="cell-label">屏幕 / DPI</div><div class="cell-val">'+esc(d.screen||'—')+' · '+esc(d.density||'—')+' dpi</div></div>'+
+    '<div class="cell"><div class="cell-label">SELinux</div><div class="cell-val '+(d.selinux==='Enforcing'?'warn':'ok')+'">'+esc(d.selinux||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">Root 版本</div><div class="cell-val hi">'+esc(d.magisk||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">时区</div><div class="cell-val">'+esc(d.timezone||'—')+'</div></div>'+
+    '<div class="cell"><div class="cell-label">语言</div><div class="cell-val">'+esc(d.lang||'—')+'</div></div>'+
+    '</div>';
+  document.getElementById('sys-loader').style.display='none';
+  document.getElementById('sys-body').style.display='block';
+}
+
+/* ========= SSAID ========= */
+async function loadApps(){
+  document.getElementById('app-loader').style.display='flex';
+  document.getElementById('app-loader').innerHTML='<div class="spin"></div>扫描已安装游戏中…';
+  document.getElementById('app-body').style.display='none';
+  allApps=[];
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/ssaid.sh list');
+    const json=out.trim();
+    if(!json)throw new Error('脚本无输出');
+    const d=JSON.parse(json);
+    if(!d.apps)throw new Error('返回数据异常');
+    allApps=d.apps;
+  }catch(e){
+    document.getElementById('app-loader').innerHTML='<span class="err-msg">读取失败<br>'+esc(e.message||e)+'</span>';
+    return;
+  }
+  renderApps(allApps);
+  document.getElementById('app-loader').style.display='none';
+  document.getElementById('app-body').style.display='block';
+}
+
+function renderApps(list){
+  document.getElementById('app-count').textContent='已检测到 '+list.length+' 款应用';
+  const c=document.getElementById('app-list');
+  if(!list.length){
+    c.innerHTML='<div class="empty-msg">本机未检测到任何<br><em>支持的应用</em></div>';
+    return;
+  }
+  c.innerHTML=list.map(function(app){
+    const sid=app.pkg.replace(/[^a-zA-Z0-9]/g,'_');
+    const ssaidVal=app.ssaid||'未分配';
+    const ssaidCls=(ssaidVal==='未分配')?'ssaid-val unassigned':'ssaid-val';
+    let iconHtml=app.icon&&app.icon.indexOf('data:image')===0
+      ?'<img src="'+app.icon+'" alt="">'
+      :'<span style="font-size:10px">无图标</span>';
+    return '<div class="app-card" id="card-'+sid+'">'+
+      '<div class="app-head">'+
+        '<div class="app-icon">'+iconHtml+'</div>'+
+        '<div class="app-info">'+
+          '<div class="app-label">'+esc(app.label||app.pkg)+'</div>'+
+          '<div class="app-pkg">'+esc(app.pkg)+'</div>'+
+          (app.ver?'<div class="app-ver">v'+esc(app.ver)+'</div>':'')+
+        '</div>'+
+      '</div>'+
+      '<div class="ssaid-row">'+
+        '<span class="ssaid-tag">SSAID</span>'+
+        '<span class="'+ssaidCls+'" id="ssaid-'+sid+'">'+esc(ssaidVal)+'</span>'+
+        '<div class="btn-group">'+
+          '<button class="btn" onclick="copySSAID(\''+sid+'\')">复制</button>'+
+          '<button class="btn" id="rbtn-'+sid+'" onclick="resetSSAID(\''+escA(app.pkg)+'\',\''+sid+'\')">随机重置</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function copySSAID(sid){
+  const el=document.getElementById('ssaid-'+sid);if(!el)return;
+  const val=el.textContent;
+  if(!val||val==='未分配'){toast('该应用暂无 SSAID');return}
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(val).then(function(){toast('已复制：'+val)},function(){fallbackCopy(val)});
+  }else{fallbackCopy(val)}
+}
+function fallbackCopy(val){
+  const t=document.createElement('textarea');t.value=val;document.body.appendChild(t);t.select();
+  try{document.execCommand('copy');toast('已复制：'+val)}catch(e){toast('复制失败')}
+  document.body.removeChild(t);
+}
+
+async function resetSSAID(pkg,sid){
+  const btn=document.getElementById('rbtn-'+sid);
+  const span=document.getElementById('ssaid-'+sid);
+  if(!btn||!span)return;
+  btn.classList.add('busy');btn.textContent='重置中…';
+  span.classList.remove('changed','fail','unassigned');span.classList.add('loading-val');span.textContent='生成中…';
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/ssaid.sh reset '+pkg);
+    const data=JSON.parse(out.trim());
+    span.classList.remove('loading-val');
+    if(data.ok){
+      span.textContent=data.new;span.classList.add('changed');
+      setTimeout(function(){span.classList.remove('changed')},2500);
+      toast('SSAID 已更新：'+data.new);
+      const item=allApps.find(function(a){return a.pkg===pkg});if(item)item.ssaid=data.new;
+    }else{
+      span.textContent='重置失败';span.classList.add('fail');
+      setTimeout(function(){span.classList.remove('fail')},2000);
+      toast('失败：'+(data.error||'未知错误'));
+    }
+  }catch(e){
+    span.classList.remove('loading-val');span.classList.add('fail');span.textContent='请求失败';
+    setTimeout(function(){span.classList.remove('fail')},2000);
+    toast(e.message||'调用失败');
+  }
+  btn.classList.remove('busy');btn.textContent='随机重置';
+}
+
+/* ========= 机型伪装 ========= */
+async function loadSpoof(){
+  document.getElementById('spoof-loader').style.display='flex';
+  document.getElementById('spoof-body').style.display='none';
+  try{
+    const presetOut=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh list');
+    const curOut=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh current');
+    const presetData=JSON.parse(presetOut.trim());
+    const curData=JSON.parse(curOut.trim());
+    spoofPresets=presetData.presets||[];
+    currentSpoof=curData;
+  }catch(e){
+    document.getElementById('spoof-loader').innerHTML='<span class="err-msg">读取失败<br>'+esc(e.message||e)+'</span>';
+    return;
+  }
+  renderSpoof();
+  document.getElementById('spoof-loader').style.display='none';
+  document.getElementById('spoof-body').style.display='block';
+}
+
+function renderSpoof(){
+  const cur=currentSpoof;
+  let html='';
+  if(cur&&cur.active){
+    html+='<div class="spoof-status active">'+
+      '<div class="spoof-status-tag">伪装中</div>'+
+      '<div class="spoof-status-name">'+esc(cur.label||'')+'</div>'+
+      '<div class="spoof-status-detail">'+esc(cur.brand||'')+' · '+esc(cur.model||'')+'</div>'+
+      '</div>';
+  }else{
+    html+='<div class="spoof-status">'+
+      '<div class="spoof-status-tag">原机型</div>'+
+      '<div class="spoof-status-name">'+esc(cur.brand||'未知')+'</div>'+
+      '<div class="spoof-status-detail">'+esc(cur.model||'')+'</div>'+
+      '</div>';
+  }
+
+  // 按分类分组
+  const groups={};
+  spoofPresets.forEach(function(p){
+    const cat=p.category||'其他';
+    if(!groups[cat])groups[cat]=[];
+    groups[cat].push(p);
+  });
+
+  // "系统"分类（恢复原机型）放最前
+  const orderedCats=['系统'];
+  Object.keys(groups).forEach(function(c){if(c!=='系统')orderedCats.push(c)});
+
+  orderedCats.forEach(function(cat){
+    if(!groups[cat])return;
+    html+='<div class="spoof-cat-title">'+esc(cat)+'</div><div class="spoof-list">';
+    groups[cat].forEach(function(p){
+      const isCurrent=cur&&cur.id===p.id;
+      const cls='spoof-item'+(isCurrent?' current':'')+(p.id==='__restore__'?' restore':'');
+      html+='<div class="'+cls+'" onclick="applySpoof(\''+escA(p.id)+'\')">'+
+        '<div class="spoof-item-name">'+esc(p.label)+'</div>'+
+        (p.model?'<div class="spoof-item-id">'+esc(p.model)+'</div>':'')+
+        '</div>';
+    });
+    html+='</div>';
+  });
+
+  document.getElementById('spoof-body').innerHTML=html;
+}
+
+async function applySpoof(id){
+  toast('正在应用…');
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh apply '+id);
+    const data=JSON.parse(out.trim());
+    if(data.ok){
+      toast(data.msg||(data.action==='restore'?'已恢复原机型':'已应用：'+data.label));
+      // 刷新状态
+      setTimeout(loadSpoof,300);
+    }else{
+      toast('失败：'+(data.error||'未知'));
+    }
+  }catch(e){
+    toast('调用失败：'+(e.message||e));
+  }
+}
+
+/* ========= 缓存清理 ========= */
+async function runClean(mode){
+  const btn=document.getElementById('btn-'+mode);
+  if(!btn)return;
+  btn.classList.add('busy');
+  const oldText=btn.textContent;
+  btn.textContent='清理中…';
+  toast('开始'+(mode==='deep'?'深度':'轻度')+'清理…');
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/cleaner.sh '+mode);
+    const data=JSON.parse(out.trim());
+    if(data.ok){
+      toast(data.msg||'清理完成');
+    }else{
+      toast('失败：'+(data.error||''));
+    }
+  }catch(e){
+    toast('调用失败：'+(e.message||e));
+  }
+  btn.classList.remove('busy');
+  btn.textContent=oldText;
+}
+
+async function loadSettings(){
+  const body=document.getElementById('settings-body');
+  try{
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/settings.sh get');
+    userSettings=JSON.parse(out.trim());
+  }catch(e){
+    body.innerHTML='<span class="err-msg">读取设置失败</span>';
+    return;
+  }
+  renderSettings();
+}
+
+function renderSettings(){
+  const s=userSettings;
+  const body=document.getElementById('settings-body');
+  body.innerHTML=
+    toggleRow('auto_clean_on_boot','开机自动清理','开机后自动执行一次清理脚本',s.auto_clean_on_boot)+
+    toggleRow('auto_clean_on_codev_start','无畏契约启动时清理','检测到游戏启动时自动执行清理',s.auto_clean_on_codev_start)+
+    toggleRow('auto_clean_on_codev_stop','无畏契约结束时清理','检测到游戏退出时自动执行清理',s.auto_clean_on_codev_stop);
+}
+
+function toggleRow(key,label,desc,val){
+  const on=val==1||val==='1'||val===1;
+  return '<div class="toggle-row">'+
+    '<div class="toggle-info">'+
+      '<div class="toggle-label">'+esc(label)+'</div>'+
+      '<div class="toggle-desc">'+esc(desc)+'</div>'+
+    '</div>'+
+    '<div class="toggle-switch'+(on?' on':'')+'" onclick="toggleSetting(\''+key+'\',this)"></div>'+
+  '</div>';
+}
+
+async function toggleSetting(key,el){
+  const newVal=el.classList.contains('on')?0:1;
+  el.classList.toggle('on');
+  try{
+    await execRoot('sh '+MOD_DIR+'/scripts/settings.sh set '+key+' '+newVal);
+    userSettings[key]=newVal;
+    toast('已'+(newVal?'开启':'关闭'));
+  }catch(e){
+    el.classList.toggle('on');
+    toast('保存失败');
+  }
+}
+
+// 启动
+loadSys();
+setTimeout(popupNotice,300);
+
+document.getElementById('modal-mask').addEventListener('click',function(e){
+  if(e.target===this)closeModal();
+});
+</script>
+</body>
+</html>
