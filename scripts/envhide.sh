@@ -8,10 +8,14 @@ RP=""
 for p in /data/adb/magisk/resetprop /data/adb/ap/bin/resetprop /data/adb/apatch/resetprop /sbin/resetprop /system/bin/resetprop; do
   [ -x "$p" ] && RP="$p" && break
 done
-setprop_ro(){ if [ -n "$RP" ]; then "$RP" -n "$1" "$2" 2>/dev/null; fi; setprop "$1" "$2" 2>/dev/null; }
+setprop_ro(){ "$RP" -n "$1" "$2" 2>/dev/null; }
 json_s(){ printf '%s' "$1" | sed 's/\\/\\\\/g;s/"/\\"/g'; }
 
 hide_bl(){
+  if [ -z "$RP" ]; then
+    printf '{"ok":false,"error":"未找到 resetprop，无法修改只读属性"}\n'
+    return 1
+  fi
   n=0
   for prop in \
     "ro.boot.verifiedbootstate=green" \
@@ -31,7 +35,6 @@ hide_bl(){
     "ro.boot.hwcountry=CN" ; do
     setprop_ro "${prop%=*}" "${prop#*=}"; n=$((n+1))
   done
-  [ -n "$RP" ] && "$RP" --file /system/build.prop 2>/dev/null
   printf '{"ok":true,"applied":%d,"note":"BL伪装已应用，重启后需重跑"}\n' "$n"
 }
 
@@ -41,7 +44,9 @@ check_env(){
   locked=$(getprop ro.boot.flash.locked)
   selinux=$(getenforce 2>/dev/null)
   root=0
-  [ -e /system/bin/su ] || [ -e /system/xbin/su ] || [ -e /data/adb/magisk ] || [ -e /data/adb/ap ] || [ -e /data/adb/ksu ] && root=1
+  for su in /system/bin/su /system/xbin/su /data/adb/magisk /data/adb/ap /data/adb/ksu; do
+    [ -e "$su" ] && { root=1; break; }
+  done
   frida=0; ls /data/local/tmp/frida* >/dev/null 2>&1 && frida=1
   xposed=0; [ -e /system/framework/XposedBridge.jar ] && xposed=1
   emu=0

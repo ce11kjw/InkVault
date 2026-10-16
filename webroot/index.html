@@ -718,13 +718,19 @@ document.getElementById('modal-mask').addEventListener('click',function(e){
 });
 
 /* ========= 工具箱（融合 Fish） ========= */
-function tbEsc(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function tbEsc(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+// 只允许安全字符，防 shell 注入
+function tbSafe(v,re){v=String(v==null?'':v);return re.test(v)?v:null}
+var TB_ID=/^[a-z0-9_]+$/i, TB_MODE=/^(light|deep)$/, TB_NUM=/^[0-9]{1,2}$/;
+// 解析脚本最后一行 JSON
+function tbLastJson(out){try{return JSON.parse(String(out).trim().split('\n').pop())||{}}catch(e){return {}}}
+function tbEsc_____unused(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 async function tbLoadGames(){
   const box=document.getElementById('tb-games');
   box.innerHTML='<div class="loader"><div class="spin"></div>读取游戏列表…</div>';
   try{
     const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh list');
-    let arr=[];try{arr=JSON.parse(out.trim())}catch(e){}
+    var arr=[];try{arr=JSON.parse(String(out).trim())}catch(e){}
     if(!arr.length){box.innerHTML='<div class="empty-msg">无游戏数据</div>';return}
     let h='';
     arr.forEach(function(g){
@@ -740,18 +746,21 @@ async function tbLoadGames(){
   }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
 }
 async function tbClean(id,mode){
-  toast('正在'+(mode==='deep'?'深度':'轻度')+'清理…');
+  var sid=tbSafe(id,TB_ID), sm=tbSafe(mode,TB_MODE);
+  if(!sid||!sm){toast('参数非法，已拦截');return}
+  toast('正在'+(sm==='deep'?'深度':'轻度')+'清理…');
   try{
-    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh clean '+id+' '+mode);
-    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh clean '+sid+' '+sm);
+    var r=tbLastJson(out);
     if(r.ok){toast(r.game+' 清理完成，释放 '+(r.freed_kb||0)+' KB')}
     else{toast('清理失败：'+(r.error||'未知'))}
   }catch(e){toast('执行出错：'+(e.message||e))}
 }
 async function tbCleanAll(mode){
+  var sm=tbSafe(mode,TB_MODE); if(!sm){toast('参数非法');return}
   toast('正在清理全部已安装游戏…');
   try{
-    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh cleanall '+mode);
+    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh cleanall '+sm);
     const lines=out.trim().split('\n').filter(function(x){return x.indexOf('"ok":true')>=0});
     toast('完成，清理了 '+lines.length+' 个游戏');
   }catch(e){toast('执行出错：'+(e.message||e))}
@@ -760,17 +769,18 @@ async function tbLoadFp(){
   const box=document.getElementById('tb-fp');
   try{
     const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh status');
-    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    var r=tbLastJson(out);
     box.innerHTML='<div class="cell wide"><div class="cell-label">当前指纹</div><div class="cell-val">'+tbEsc(r.fingerprint||'—')+'</div></div>'+
       '<div class="cell wide" style="margin-top:8px"><div class="cell-label">设备序列号</div><div class="cell-val">'+tbEsc(r.serial||'—')+'</div>'+
       '<div class="cell-val '+(r.has_backup?'ok':'warn')+'" style="margin-top:4px">备份：'+(r.has_backup?'已有':'无')+' · resetprop：'+tbEsc(r.resetprop||'无')+'</div></div>';
   }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
 }
 async function tbFpSpoof(){
-  const n=prompt('替换的字母数量（推荐 3-6）：','4');if(n===null)return;
+  var n=prompt('替换的字母数量（推荐 3-6）：','4');if(n===null)return;
+  var sn=tbSafe(n,TB_NUM)||'4';
   toast('正在伪装指纹…');
-  try{const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh spoof '+n);
-    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+  try{const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh spoof '+sn);
+    var r=tbLastJson(out);
     toast(r.applied?'指纹已伪装成功':'已写入，可能需重启生效');tbLoadFp();
   }catch(e){toast('出错：'+(e.message||e))}
 }
@@ -782,14 +792,14 @@ async function tbFpRestore(){
 async function tbRandomIds(){
   toast('正在随机化设备ID…');
   try{const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh random-ids');
-    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    var r=tbLastJson(out);
     toast(r.ok?('已改：'+r.serial):'失败');tbLoadFp();
   }catch(e){toast('出错：'+(e.message||e))}
 }
 async function tbHideBl(){
   toast('正在伪装 BL 状态…');
   try{const out=await execRoot('sh '+MOD_DIR+'/scripts/envhide.sh hide-bl');
-    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    var r=tbLastJson(out);
     toast('已应用 '+ (r.applied||0) +' 条，重启后需重跑');
   }catch(e){toast('出错：'+(e.message||e))}
 }
@@ -797,7 +807,7 @@ async function tbCheckEnv(){
   const box=document.getElementById('tb-env');
   box.innerHTML='<div class="loader"><div class="spin"></div>检测中…</div>';
   try{const out=await execRoot('sh '+MOD_DIR+'/scripts/envhide.sh check');
-    let r={};try{r=JSON.parse(out.trim().split('\n').pop())}catch(e){}
+    var r=tbLastJson(out);
     function row(k,v,ok){return '<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">'+k+'</div><div class="cell-val '+(ok?'ok':'warn')+'">'+tbEsc(v)+'</div></div>'}
     box.innerHTML=row('Bootloader 状态',r.bootloader,r.bootloader==='green')+
       row('Flash 锁定',r.flash_locked,r.flash_locked==='1')+

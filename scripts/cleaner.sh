@@ -88,17 +88,14 @@ clean_deep() {
 run_and_report() {
     local mode="$1"
     local label
-    if [ "$mode" = "light" ]; then
-        clean_light
-        RET=$?
-        label="轻度清理"
-    else
-        clean_deep
-        RET=$?
-        label="深度清理"
-    fi
-
-    if [ $RET -eq 0 ]; then
+    optimize_inotify
+    # 统一委托给 games.sh（唯一清理实现），避免与新面板重复
+    local out ret codev_ok
+    out=$(sh "$(dirname "$0")/games.sh" clean codev "$mode" 2>/dev/null)
+    ret=$?
+    codev_ok=$(printf '%s' "$out" | grep -c '"ok":true')
+    if [ "$mode" = "light" ]; then label="轻度清理"; else label="深度清理"; fi
+    if [ "$codev_ok" -ge 1 ]; then
         NOW="$(date '+%Y-%m-%d %H:%M:%S')"
         write_setting "last_clean_time" "$NOW"
         echo "[$NOW] $label 完成" >> "$LOG_FILE"

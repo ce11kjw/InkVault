@@ -35,17 +35,29 @@ to_greek(){
 
 json_s(){ printf '%s' "$1" | sed 's/\\/\\\\/g;s/"/\\"/g'; }
 
+# 备份文件读写（统一 key=value 格式）
+bak_set(){ # key value
+  touch "$BAK"
+  if grep -q "^$1=" "$BAK" 2>/dev/null; then
+    sed -i "s|^$1=.*|$1=$2|" "$BAK"
+  else
+    printf '%s=%s\n' "$1" "$2" >> "$BAK"
+  fi
+}
+bak_get(){ grep "^$1=" "$BAK" 2>/dev/null | head -1 | cut -d'=' -f2-; }
+bak_has(){ grep -q "^$1=" "$BAK" 2>/dev/null; }
+
 case "$1" in
   status)
     cur=$(getprop ro.build.fingerprint)
-    [ -f "$BAK" ] && hasbak=true || hasbak=false
+    if bak_has fp; then hasbak=true; else hasbak=false; fi
     printf '{"ok":true,"fingerprint":"%s","has_backup":%s,"resetprop":"%s","serial":"%s"}\n' \
       "$(json_s "$cur")" "$hasbak" "$(json_s "$RP")" "$(json_s "$(getprop ro.serialno)")"
     ;;
   spoof)
     n="${2:-4}"
     cur=$(getprop ro.build.fingerprint)
-    [ -f "$BAK" ] || printf '%s\n' "$cur" > "$BAK"
+    bak_has fp || bak_set fp "$cur"
     # 用 sed 逐个替换 n 个拉丁字母为希腊同形字（避免多字节问题）
     out="$cur"; cnt=0
     for pair in a:α b:β c:κ d:δ e:ε f:φ g:γ h:η i:ι j:ι k:κ l:λ m:μ n:ν o:ο p:π q:κ r:ρ s:σ t:τ u:υ v:υ w:ω x:χ y:υ z:ζ; do
@@ -63,14 +75,17 @@ case "$1" in
       "$(json_s "$cur")" "$(json_s "$now")" "$([ "$now" = "$out" ] && echo true || echo false)"
     ;;
   spoof-full)
-    [ -f "$BAK" ] || getprop ro.build.fingerprint > "$BAK"
+    bak_has fp || bak_set fp "$(getprop ro.build.fingerprint)"
     setprop_ro ro.build.fingerprint "$2"
     printf '{"ok":true,"new":"%s"}\n' "$(json_s "$2")"
     ;;
   restore)
-    if [ -f "$BAK" ]; then
-      orig=$(cat "$BAK")
+    if bak_has fp; then
+      orig=$(bak_get fp)
       setprop_ro ro.build.fingerprint "$orig"
+      # 恢复 serialno/meid（若有备份）
+      bak_has serialno && setprop_ro ro.serialno "$(bak_get serialno)"
+      bak_has meid && setprop_ro ro.ril.oem.meid "$(bak_get meid)"
       printf '{"ok":true,"restored":"%s"}\n' "$(json_s "$orig")"
     else
       printf '{"ok":false,"error":"无备份可恢复"}\n'
@@ -85,7 +100,8 @@ case "$1" in
   random-ids)
     new_serial=$(date +%s%N | md5sum | cut -c1-10)
     new_meid="9900$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')"
-    [ -f "$BAK" ] || { echo "ro.serialno=$(getprop ro.serialno)" >> "$BAK"; echo "ro.ril.oem.meid=$(getprop ro.ril.oem.meid)" >> "$BAK"; }
+    bak_has serialno || bak_set serialno "$(getprop ro.serialno)"
+    bak_has meid || bak_set meid "$(getprop ro.ril.oem.meid)"
     setprop_ro ro.serialno "$new_serial"
     setprop_ro ro.ril.oem.meid "$new_meid"
     printf '{"ok":true,"serial":"%s","meid":"%s"}\n' "$new_serial" "$new_meid"

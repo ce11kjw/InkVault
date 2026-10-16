@@ -9,18 +9,19 @@ DB="$D/games.db"
 LOG="/data/local/tmp/fusion_games.log"
 # 深度清理时保留的防重下凭证
 KEEP='Manifest_UFSFiles_Android.txt|NotAllowedUnattendedBugReports|Version\.cfg|ClearFlag_|BagSkinCache_|PlayerData\.cfg|PCache\.meta|Manifest\.ini'
-log(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
+logdir=$(dirname "$LOG"); [ -d "$logdir" ] || mkdir -p "$logdir" 2>/dev/null
+log(){ echo "[$(date '+%F %T')] $*" >> "$LOG" 2>/dev/null; }
 installed(){ pm list packages 2>/dev/null | grep -q "package:$1$"; }
 
 clean_one(){
   gid="$1"; mode="${2:-deep}"
-  line=$(grep "^${gid}|" "$DB")
+  line=$(awk -F"|" -v g="$gid" '$1==g' "$DB")
   [ -z "$line" ] && { echo "{\"ok\":false,\"error\":\"unknown game\"}"; return 1; }
   name=$(echo "$line" | cut -d'|' -f2)
   pkg=$(echo "$line" | cut -d'|' -f3)
   subs=$(echo "$line" | cut -d'|' -f4- | tr '|' ' ')
   installed "$pkg" || { echo "{\"ok\":false,\"game\":\"$name\",\"error\":\"未安装\"}"; return 1; }
-  before=$(du -sk "/data/user/0/$pkg" 2>/dev/null | awk '{print $1}')
+  before=$(du -sk /data/user/*/"$pkg" 2>/dev/null | awk '{s+=$1}END{print s+0}')
   # 内部数据 /data/user/*/<pkg>/<sub>
   for u in /data/user/*/; do
     u="${u%/}"
@@ -28,7 +29,6 @@ clean_one(){
       case "$s" in *UE4Game*|*Saved*) [ "$mode" = "light" ] && continue;; esac
       [ -e "$u/$pkg/$s" ] && rm -rf "$u/$pkg/$s" 2>/dev/null
     done
-    rm -rf "$u/cn.binmeng.miui/files/Android/data/$pkg" 2>/dev/null
   done
   # 外部数据 /storage/emulated/*/Android/{data,media,obb}/<pkg>
   for st in /storage/emulated/*/; do
@@ -46,7 +46,7 @@ clean_one(){
       fi
     done
   done
-  after=$(du -sk "/data/user/0/$pkg" 2>/dev/null | awk '{print $1}')
+  after=$(du -sk /data/user/*/"$pkg" 2>/dev/null | awk '{s+=$1}END{print s+0}')
   delta=$(( ${before:-0} - ${after:-0} )); [ $delta -lt 0 ] && delta=0
   log "clean $name mode=$mode freed=${delta}KB"
   printf '{"ok":true,"game":"%s","pkg":"%s","mode":"%s","freed_kb":%d,"time":"%s"}\n' "$name" "$pkg" "$mode" "$delta" "$(date '+%F %T')"
@@ -67,7 +67,7 @@ case "$1" in
     ;;
   clean) clean_one "$2" "$3" ;;
   cleanall)
-    while IFS='|' read -r id rest; do clean_one "$id" "${2:-deep}"; done < "$DB"
+    awk -F"|" '{print $1}' "$DB" | while read -r id; do [ -n "$id" ] && clean_one "$id" "${2:-deep}"; done
     ;;
   *) echo '{"ok":false,"error":"usage: games.sh list|clean <id>|cleanall"}' ;;
 esac
