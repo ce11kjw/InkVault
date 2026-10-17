@@ -3,7 +3,7 @@
 # 作者: 呆呆 | QQ:891354018 | 群:774886621
 
 SSAID_FILE="/data/system/users/0/settings_ssaid.xml"
-ICON_CACHE_DIR="/data/adb/modules/webui_info/webroot/icons"
+ICON_CACHE_DIR="/data/adb/modules/webui_info/webroot/icons/cache"
 ACTION="$1"
 PKG="$2"
 
@@ -185,10 +185,21 @@ case "$ACTION" in
 
     reset)
         [ -z "$PKG" ] && { echo '{"ok":false,"error":"missing pkg"}'; exit 1; }
+        # 包名白名单校验：只允许字母数字点下划线，防 sed 表达式注入
+        case "$PKG" in
+            *[!A-Za-z0-9._]*) echo '{"ok":false,"error":"invalid package name"}'; exit 1 ;;
+        esac
         [ ! -f "$SSAID_FILE" ] && { echo '{"ok":false,"error":"ssaid file not found"}'; exit 1; }
 
         OLD_ID=$(get_ssaid "$PKG")
         NEW_ID=$(gen_random_id)
+        # OLD_ID 必须是 16 位 hex，否则 sed 会把空串当模式 → 全文件插字符
+        if [ -n "$OLD_ID" ]; then
+            case "$OLD_ID" in
+                *[!0-9a-fA-F]*) OLD_ID="" ;;
+            esac
+            [ ${#OLD_ID} -ne 16 ] && OLD_ID=""
+        fi
 
         if [ -z "$OLD_ID" ]; then
             MAX_ID=$(strings "$SSAID_FILE" 2>/dev/null | grep -oE '_id="[0-9]+"' | grep -oE '[0-9]+' | sort -n | tail -1)
@@ -196,7 +207,9 @@ case "$ACTION" in
             sed -i "s|</settings>|<setting id=\"$NEXT_ID\" name=\"$PKG\" value=\"$NEW_ID\" package=\"android\" defaultValue=\"$NEW_ID\" defaultSysSet=\"true\" />\n</settings>|" "$SSAID_FILE"
             RESULT="inserted"
         else
-            sed -i "s/$OLD_ID/$NEW_ID/g" "$SSAID_FILE"
+            # 先备份，再精确替换（只替换该 pkg 那一行的 value，不全局替换）
+            cp -f "$SSAID_FILE" "${SSAID_FILE}.fusion.bak" 2>/dev/null
+            sed -i "/name=\"$PKG\"/s/$OLD_ID/$NEW_ID/g" "$SSAID_FILE"
             RESULT="updated"
         fi
 
@@ -213,7 +226,8 @@ case "$ACTION" in
         ;;
 
     clear_cache)
-        rm -rf "$ICON_CACHE_DIR"
+        # 只清缓存子目录，模块自带的 webroot/icons/*.png 不受影响
+        rm -rf "$ICON_CACHE_DIR" 2>/dev/null
         echo '{"ok":true,"msg":"icon cache cleared"}'
         ;;
 

@@ -10,23 +10,24 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOGFILE"
 }
 
-# 等待开机完成
+# 等待开机完成（最多 5 分钟，避免异常开机时永久挂住）
+WAIT=0
 until [ "$(getprop sys.boot_completed)" = "1" ]; do
     sleep 2
+    WAIT=$((WAIT+1))
+    [ $WAIT -ge 150 ] && log "等待开机超时(300s)，继续执行" && break
 done
 sleep 5
 
 log "===== 开机服务启动 ====="
 
-# 准备融合工具目录
-mkdir -p /data/adb/fusion 2>/dev/null
+# 准备融合工具目录 + 脚本可执行
+mkdir -p /data/adb/fusion /data/local/tmp 2>/dev/null
 chmod 755 "$MODDIR/scripts/"*.sh 2>/dev/null
 
 # 重应用 BL 伪装（每次开机）
 sh "$MODDIR/scripts/envhide.sh" hide-bl >/dev/null 2>&1
 log "BL 伪装已重应用"
-
-chmod +x "$MODDIR/scripts/"*.sh 2>/dev/null
 
 # 1. 应用机型伪装（如果有保存）
 log "执行机型伪装恢复"

@@ -67,11 +67,17 @@ xiaomi_14_ultra|其他旗舰|小米 14 Ultra|Xiaomi|24030PN60C"
 # 写入指定机型的 prop 配置
 write_prop() {
     local id="$1"
-    > "$PROP_FILE"
+    # 先校验 id 是否存在，避免未知 id 时先把 system.prop 清空
+    case "$id" in
+        oneplus_ace6_extreme|oneplus_ace6t|oneplus_ace6|oneplus_ace5_extreme|iqoo15_ultra|iqoo15|iqoo13|iqoo_neo11|iqoo_neo10_pro_plus|iqoo_neo10|iqoo_z11|iqoo_z11x|iqoo_z11_turbo|redmagic_11s_pro_plus|redmagic_11_air|redmagic_10s_pro_plus|redmagic_10_pro|redmagic_tab5_pro|legion_y700_5|rog_8_pro|xiaomi_14_ultra) ;;
+        *) return 1 ;;
+    esac
+    # 写临时文件再原子替换，避免中途失败留下空文件
+    local TMP="${PROP_FILE}.tmp.$$"
 
     case "$id" in
         oneplus_ace6_extreme)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=PKW110
 ro.product.brand=OnePlus
 ro.product.manufacturer=OnePlus
@@ -81,7 +87,7 @@ ro.product.marketname=一加 Ace 6 至尊版
 EOF
             LABEL="一加 Ace 6 至尊版"; BRAND="OnePlus"; MODEL="PKW110" ;;
         oneplus_ace6t)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=PKE110
 ro.product.brand=OnePlus
 ro.product.manufacturer=OnePlus
@@ -91,7 +97,7 @@ ro.product.marketname=一加 Ace 6T
 EOF
             LABEL="一加 Ace 6T"; BRAND="OnePlus"; MODEL="PKE110" ;;
         oneplus_ace6)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=PKD110
 ro.product.brand=OnePlus
 ro.product.manufacturer=OnePlus
@@ -101,7 +107,7 @@ ro.product.marketname=一加 Ace 6
 EOF
             LABEL="一加 Ace 6"; BRAND="OnePlus"; MODEL="PKD110" ;;
         oneplus_ace5_extreme)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=PKB110
 ro.product.brand=OnePlus
 ro.product.manufacturer=OnePlus
@@ -111,7 +117,7 @@ ro.product.marketname=一加 Ace 5 至尊版
 EOF
             LABEL="一加 Ace 5 至尊版"; BRAND="OnePlus"; MODEL="PKB110" ;;
         iqoo15_ultra)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2456A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -121,7 +127,7 @@ ro.product.marketname=iQOO 15 Ultra
 EOF
             LABEL="iQOO 15 Ultra"; BRAND="iQOO"; MODEL="V2456A" ;;
         iqoo15)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2455A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -131,7 +137,7 @@ ro.product.marketname=iQOO 15
 EOF
             LABEL="iQOO 15"; BRAND="iQOO"; MODEL="V2455A" ;;
         iqoo13)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2401A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -141,7 +147,7 @@ ro.product.marketname=iQOO 13
 EOF
             LABEL="iQOO 13"; BRAND="iQOO"; MODEL="V2401A" ;;
         iqoo_neo11)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2440A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -151,7 +157,7 @@ ro.product.marketname=iQOO Neo11
 EOF
             LABEL="iQOO Neo11"; BRAND="iQOO"; MODEL="V2440A" ;;
         iqoo_neo10_pro_plus)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2435A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -161,7 +167,7 @@ ro.product.marketname=iQOO Neo10 Pro+
 EOF
             LABEL="iQOO Neo10 Pro+"; BRAND="iQOO"; MODEL="V2435A" ;;
         iqoo_neo10)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2422A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -171,7 +177,7 @@ ro.product.marketname=iQOO Neo10
 EOF
             LABEL="iQOO Neo10"; BRAND="iQOO"; MODEL="V2422A" ;;
         iqoo_z11)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2445A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -181,7 +187,7 @@ ro.product.marketname=iQOO Z11
 EOF
             LABEL="iQOO Z11"; BRAND="iQOO"; MODEL="V2445A" ;;
         iqoo_z11x)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2446A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -191,7 +197,7 @@ ro.product.marketname=iQOO Z11x
 EOF
             LABEL="iQOO Z11x"; BRAND="iQOO"; MODEL="V2446A" ;;
         iqoo_z11_turbo)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=V2447A
 ro.product.brand=iQOO
 ro.product.manufacturer=vivo
@@ -201,7 +207,7 @@ ro.product.marketname=iQOO Z11 Turbo
 EOF
             LABEL="iQOO Z11 Turbo"; BRAND="iQOO"; MODEL="V2447A" ;;
         redmagic_11s_pro_plus)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=NX799S
 ro.product.brand=Nubia
 ro.product.manufacturer=ZTE
@@ -211,7 +217,7 @@ ro.product.marketname=红魔11S Pro+
 EOF
             LABEL="红魔 11S Pro+"; BRAND="Nubia"; MODEL="NX799S" ;;
         redmagic_11_air)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=NX780A
 ro.product.brand=Nubia
 ro.product.manufacturer=ZTE
@@ -221,7 +227,7 @@ ro.product.marketname=红魔11 Air
 EOF
             LABEL="红魔 11 Air"; BRAND="Nubia"; MODEL="NX780A" ;;
         redmagic_10s_pro_plus)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=NX789S
 ro.product.brand=Nubia
 ro.product.manufacturer=ZTE
@@ -231,7 +237,7 @@ ro.product.marketname=红魔10S Pro+
 EOF
             LABEL="红魔 10S Pro+"; BRAND="Nubia"; MODEL="NX789S" ;;
         redmagic_10_pro)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=NX789J
 ro.product.brand=Nubia
 ro.product.manufacturer=ZTE
@@ -241,7 +247,7 @@ ro.product.marketname=红魔10 Pro
 EOF
             LABEL="红魔 10 Pro"; BRAND="Nubia"; MODEL="NX789J" ;;
         redmagic_tab5_pro)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=NX736J
 ro.product.brand=Nubia
 ro.product.manufacturer=ZTE
@@ -251,7 +257,7 @@ ro.product.marketname=红魔游戏平板5 Pro
 EOF
             LABEL="红魔游戏平板5 Pro"; BRAND="Nubia"; MODEL="NX736J" ;;
         legion_y700_5)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=Lenovo TB-321FU
 ro.product.brand=Lenovo
 ro.product.manufacturer=LENOVO
@@ -261,7 +267,7 @@ ro.product.marketname=拯救者Y700五代
 EOF
             LABEL="拯救者 Y700 五代"; BRAND="Lenovo"; MODEL="TB-321FU" ;;
         rog_8_pro)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=ASUS_AI2401_C
 ro.product.brand=asus
 ro.product.manufacturer=asus
@@ -271,7 +277,7 @@ ro.product.marketname=ROG Phone 8 Pro
 EOF
             LABEL="ROG 8 Pro"; BRAND="asus"; MODEL="AI2401" ;;
         xiaomi_14_ultra)
-            cat > "$PROP_FILE" <<'EOF'
+            cat > "$TMP" <<'EOF'
 ro.product.model=24030PN60C
 ro.product.brand=Xiaomi
 ro.product.manufacturer=Xiaomi
@@ -283,6 +289,8 @@ EOF
         *)
             return 1 ;;
     esac
+    # 原子替换（同一分区 rename 是原子的）
+    mv -f "$TMP" "$PROP_FILE" 2>/dev/null || { rm -f "$TMP"; return 1; }
     chmod 644 "$PROP_FILE"
     return 0
 }

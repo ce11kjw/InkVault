@@ -43,7 +43,6 @@ run_monitor() {
     }
 
     while true; do
-        logcat -c 2>/dev/null
         logcat -b main -T 1 ActivityManager:I '*:S' 2>/dev/null | while IFS= read -r line; do
 
             # 进程启动检测
@@ -94,8 +93,10 @@ case "$ACTION" in
             OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
             if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
                 kill "$OLD_PID" 2>/dev/null
-                # 杀掉所有相关 logcat
-                pkill -f "logcat.*ActivityManager" 2>/dev/null
+                # 只杀掉本脚本派生的 logcat（按父进程匹配，不误伤其他工具）
+                for p in $(pgrep -f "logcat -b main -T 1 ActivityManager" 2>/dev/null); do
+                    [ "$p" != "$$" ] && [ "$p" != "$OLD_PID" ] && kill "$p" 2>/dev/null
+                done
                 log "监听已停止 PID=$OLD_PID"
                 rm -f "$PID_FILE"
                 echo '{"ok":true,"msg":"监听已停止"}'
