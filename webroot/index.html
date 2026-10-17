@@ -324,8 +324,9 @@ function switchTab(name,btn){
   if(name==='toolbox'){tbLoadGames();tbLoadFp();}
   window.scrollTo(0,0);
 }
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-function escA(s){return String(s==null?'':s).replace(/'/g,"\\'")}
+function safeParse(txt,fb){try{return JSON.parse(String(txt).trim())}catch(e){return fb||null}}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function escA(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}
 
 async function execRoot(cmd){
   if(typeof ksu!=='undefined'&&ksu.exec){
@@ -424,7 +425,7 @@ async function loadSys(){
     const out=await execRoot('sh '+MOD_DIR+'/scripts/sysinfo.sh');
     const json=out.trim();
     if(!json)throw new Error('脚本无输出');
-    const d=JSON.parse(json);
+    const d=safeParse(json);if(!d)throw new Error('返回数据解析失败');
     renderSys(d);
   }catch(e){
     document.getElementById('sys-loader').innerHTML='<span class="err-msg">读取失败<br>'+esc(e.message||e)+'</span>';
@@ -475,7 +476,7 @@ async function loadApps(){
     const out=await execRoot('sh '+MOD_DIR+'/scripts/ssaid.sh list');
     const json=out.trim();
     if(!json)throw new Error('脚本无输出');
-    const d=JSON.parse(json);
+    const d=safeParse(json);if(!d)throw new Error('返回数据解析失败');
     if(!d.apps)throw new Error('返回数据异常');
     allApps=d.apps;
   }catch(e){
@@ -537,6 +538,8 @@ function fallbackCopy(val){
 }
 
 async function resetSSAID(pkg,sid){
+  // 纵深防御：只允许合法包名字符
+  if(!/^[A-Za-z0-9._]+$/.test(String(pkg))){toast('包名非法，已拦截');return}
   const btn=document.getElementById('rbtn-'+sid);
   const span=document.getElementById('ssaid-'+sid);
   if(!btn||!span)return;
@@ -544,7 +547,7 @@ async function resetSSAID(pkg,sid){
   span.classList.remove('changed','fail','unassigned');span.classList.add('loading-val');span.textContent='生成中…';
   try{
     const out=await execRoot('sh '+MOD_DIR+'/scripts/ssaid.sh reset '+pkg);
-    const data=JSON.parse(out.trim());
+    const data=safeParse(out)||{};
     span.classList.remove('loading-val');
     if(data.ok){
       span.textContent=data.new;span.classList.add('changed');
@@ -571,8 +574,8 @@ async function loadSpoof(){
   try{
     const presetOut=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh list');
     const curOut=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh current');
-    const presetData=JSON.parse(presetOut.trim());
-    const curData=JSON.parse(curOut.trim());
+    const presetData=safeParse(presetOut)||{};
+    const curData=safeParse(curOut)||{};
     spoofPresets=presetData.presets||[];
     currentSpoof=curData;
   }catch(e){
@@ -631,10 +634,11 @@ function renderSpoof(){
 }
 
 async function applySpoof(id){
+  if(!/^[a-z0-9_]+$/i.test(String(id))){toast('参数非法，已拦截');return}
   toast('正在应用…');
   try{
     const out=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh apply '+id);
-    const data=JSON.parse(out.trim());
+    const data=safeParse(out)||{};
     if(data.ok){
       toast(data.msg||(data.action==='restore'?'已恢复原机型':'已应用：'+data.label));
       // 刷新状态
@@ -649,6 +653,7 @@ async function applySpoof(id){
 
 /* ========= 缓存清理 ========= */
 async function runClean(mode){
+  if(!/^(light|deep)$/.test(String(mode))){toast('参数非法，已拦截');return}
   const btn=document.getElementById('btn-'+mode);
   if(!btn)return;
   btn.classList.add('busy');
@@ -657,7 +662,7 @@ async function runClean(mode){
   toast('开始'+(mode==='deep'?'深度':'轻度')+'清理…');
   try{
     const out=await execRoot('sh '+MOD_DIR+'/scripts/cleaner.sh '+mode);
-    const data=JSON.parse(out.trim());
+    const data=safeParse(out)||{};
     if(data.ok){
       toast(data.msg||'清理完成');
     }else{
@@ -674,7 +679,7 @@ async function loadSettings(){
   const body=document.getElementById('settings-body');
   try{
     const out=await execRoot('sh '+MOD_DIR+'/scripts/settings.sh get');
-    userSettings=JSON.parse(out.trim());
+    userSettings=safeParse(out);if(!userSettings)throw new Error('解析失败');
   }catch(e){
     body.innerHTML='<span class="err-msg">读取设置失败</span>';
     return;

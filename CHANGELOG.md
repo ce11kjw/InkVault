@@ -1,5 +1,21 @@
 # 更新日志
 
+## v1.0.1 (2026-10-17)
+
+第四轮全量审计（剩余脚本逐行）修复。
+
+### 严重
+- `settings.sh`: 写入改用 awk 重写文件（原 `sed "s|k=v|"` 中 val 含 `&`/`|`/`\` 会写坏配置）
+  + key 白名单 + val 字符白名单 + clean_mode 限定 light|deep
+- `sysinfo.sh`: 全面 JSON 转义（fingerprint 含 `"`/`\` 时原会输出非法 JSON → 系统信息页白屏）
+- `index.html`: resetSSAID / applySpoof / runClean 增加参数白名单校验（纵深防御）
+
+### 中等
+- `settings.sh`: read_setting 改用 awk 精确匹配（原 grep -E 受正则元字符影响）
+- `index.html`: esc() 补单引号转义；escA() 补反斜杠与双引号转义
+- `sysinfo.sh`: uptime / ram / battery 增加空值兜底
+- `index.html`: 新增 safeParse()，7 处裸 JSON.parse 全部替换
+
 ## v1.0 (2026-10-17)
 
 首个版本：Fish 工具箱 + CITADEL-Menu 合并。
