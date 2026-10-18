@@ -1067,8 +1067,10 @@ async function dvLoad(){
     var r=dvLastJson(out);
     if(!r||!r.ok){box.innerHTML='<div class="err-msg">'+dvEsc((r&&r.error)||out)+'</div>';return}
     var h='';
-    h+=dvCell('Serialno',r.serial,'');
-    h+=dvCell('MAC (wlan0)',r.mac,'');
+    h+=dvCell('Serialno',r.serial,r.sn_match?'ok':'');
+    if(r.file_sn&&r.file_sn!==r.serial)h+=dvCell('  └ 模块目标值',r.file_sn,'warn');
+    h+=dvCell('MAC (wlan0)',r.mac,r.mac_match?'ok':'');
+    if(r.file_mac&&r.file_mac!==r.mac)h+=dvCell('  └ 模块目标值',r.file_mac,'warn');
     h+=dvCell('Android ID',r.android_id,'');
     h+=dvCell('机型',r.brand+' '+r.model+(r.marketname&&r.marketname!==r.model?' ('+r.marketname+')':''),'');
     h+=dvCell('代号',r.device,'');

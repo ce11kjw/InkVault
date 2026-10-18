@@ -1,6 +1,7 @@
 #!/system/bin/sh
 # 设备伪装 + 检测对抗 统一入口
-# 用法: device.sh status|reset-mac|reset-sn|hide-env|check|mods
+# 用法: device.sh status|reset-mac|reset-sn|hide-env|check
+# 策略：安装/开机【绝不生成】任何随机值；只有用户显式点按钮才生成
 # 设备标识本体由 ALING_MAC / ALING_Serialno 提供（外部模块，不重复实现）
 
 MOD_DIR="/data/adb/modules/webui_info"
@@ -10,14 +11,14 @@ ALING_SE="/data/adb/modules/SELinux-LING"
 
 json_s(){ printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/ /g'; }
 
-# 模块是否已装且启用
-mod_state(){ # id -> installed|disabled|missing
+mod_state(){ # id -> enabled|disabled|removing|missing
   [ -d "/data/adb/modules/$1" ] || { printf 'missing'; return; }
   [ -f "/data/adb/modules/$1/disable" ] && { printf 'disabled'; return; }
   [ -f "/data/adb/modules/$1/remove" ] && { printf 'removing'; return; }
   printf 'enabled'
 }
 
+# ---- 只读：状态 ----
 do_status(){
   sn=$(getprop ro.serialno)
   fp=$(getprop ro.build.fingerprint)
@@ -25,7 +26,6 @@ do_status(){
   brand=$(getprop ro.product.brand)
   mk=$(getprop ro.product.marketname)
   dev=$(getprop ro.product.device)
-  # 主网卡 MAC（wlan0 优先）
   mac=$(cat /sys/class/net/wlan0/address 2>/dev/null)
   [ -z "$mac" ] && mac=$(cat /sys/class/net/eth0/address 2>/dev/null)
   se=$(getenforce 2>/dev/null)
@@ -33,17 +33,24 @@ do_status(){
   lk=$(getprop ro.boot.flash.locked)
   vb=$(getprop ro.boot.vbmeta.device_state)
   aid=$(settings get secure android_id 2>/dev/null)
+  # ALING 文件里记录的"目标值"（可能因系统 MAC 随机化而未生效）
+  fmac=$(head -1 "$ALING_MAC/MAC/TG频道@Whitelist520" 2>/dev/null)
+  fsn=$(head -1 "$ALING_SN/Serialno/TG频道@Whitelist520" 2>/dev/null)
   printf '{"ok":true,"serial":"%s","mac":"%s","fingerprint":"%s","android_id":"%s",' \
     "$(json_s "$sn")" "$(json_s "$mac")" "$(json_s "$fp")" "$(json_s "$aid")"
   printf '"model":"%s","brand":"%s","marketname":"%s","device":"%s",' \
     "$(json_s "$model")" "$(json_s "$brand")" "$(json_s "$mk")" "$(json_s "$dev")"
   printf '"selinux":"%s","bootloader":"%s","flash_locked":"%s","vbmeta":"%s",' \
     "$(json_s "$se")" "$(json_s "$bl")" "$(json_s "$lk")" "$(json_s "$vb")"
-  printf '"aling_mac":"%s","aling_sn":"%s","aling_selinux":"%s"}\n' \
+  printf '"aling_mac":"%s","aling_sn":"%s","aling_selinux":"%s",' \
     "$(mod_state ALING_MAC)" "$(mod_state ALING_Serialno)" "$(mod_state SELinux-LING)"
+  printf '"file_mac":"%s","file_sn":"%s","mac_match":%s,"sn_match":%s}\n' \
+    "$(json_s "$fmac")" "$(json_s "$fsn")" \
+    "$([ "$fmac" = "$mac" ] && echo true || echo false)" \
+    "$([ "$fsn" = "$sn" ] && echo true || echo false)"
 }
 
-# 换 MAC：调 ALING_MAC 的 action 逻辑（同款生成规则 + 写回）
+# ---- 用户操作：换 MAC（唯一会生成 MAC 的地方）----
 do_reset_mac(){
   st=$(mod_state ALING_MAC)
   [ "$st" != "enabled" ] && { printf '{"ok":false,"error":"ALING_MAC 未安装或未启用(%s)"}\n' "$st"; return 1; }
@@ -51,58 +58,74 @@ do_reset_mac(){
   B="$ALING_MAC/MAC/MAC.sh"
   [ -x "$B" ] || chmod 777 "$B" 2>/dev/null
   old=$(head -1 "$F" 2>/dev/null)
-  NM=$(printf '%02X:%02X:%02X:%02X:%02X:%02X' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
-  printf '%s\n' "$NM" > "$F" 2>/dev/null
+  # 合法单播 MAC：首字节取偶数且 >=0x02（清多播/本地管理位，避开 00/01 前缀）
+  NM=$(printf '%02X:%02X:%02X:%02X:%02X:%02X' \
+    $(( (RANDOM % 127) * 2 + 2 )) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)))
+  # 保持 ALING 原有 3 行格式，不破坏其水印注释
+  printf '%s\n#你为什么要来看这里？\n#如果你是小偷，偷东西死全家🤗\n' "$NM" > "$F" 2>/dev/null
+  chmod 644 "$F" 2>/dev/null
   "$B" >/dev/null 2>&1
-  sleep 1
-  cur=$(cat /sys/class/net/wlan0/address 2>/dev/null)
-  printf '{"ok":true,"old":"%s","generated":"%s","wlan0":"%s"}\n' "$(json_s "$old")" "$(json_s "$NM")" "$(json_s "$cur")"
+  # MAC.sh 内部要 stop/start wifi，实测 20-30s，轮询等待真正生效
+  i=0; cur=""
+  while [ $i -lt 40 ]; do
+    sleep 1
+    cur=$(cat /sys/class/net/wlan0/address 2>/dev/null)
+    [ "$cur" = "$NM" ] && break
+    i=$((i+1))
+  done
+  applied=false
+  [ "$cur" = "$NM" ] && applied=true
+  printf '{"ok":true,"old":"%s","generated":"%s","wlan0":"%s","applied":%s,"waited":%ss}\n' \
+    "$(json_s "$old")" "$(json_s "$NM")" "$(json_s "$cur")" "$applied" "$i"
 }
 
-# 换 Serialno
+# ---- 用户操作：换 Serialno（唯一会生成 SN 的地方）----
 do_reset_sn(){
   st=$(mod_state ALING_Serialno)
   [ "$st" != "enabled" ] && { printf '{"ok":false,"error":"ALING_Serialno 未安装或未启用(%s)"}\n' "$st"; return 1; }
-  F="$ALING_Serialno/Serialno/TG频道@Whitelist520"
-  B="$ALING_Serialno/Serialno/Serialno.sh"
+  F="$ALING_SN/Serialno/TG频道@Whitelist520"
+  B="$ALING_SN/Serialno/Serialno.sh"
   [ -x "$B" ] || chmod 777 "$B" 2>/dev/null
   old=$(getprop ro.serialno)
   NS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 15)
-  printf '%s\n' "$NS" > "$F" 2>/dev/null
+  printf '%s\n#你为什么要来看这里？\n#如果你是小偷，偷东西死全家🤗\n' "$NS" > "$F" 2>/dev/null
+  chmod 644 "$F" 2>/dev/null
   "$B" >/dev/null 2>&1
-  sleep 1
-  cur=$(getprop ro.serialno)
-  printf '{"ok":true,"old":"%s","generated":"%s","now":"%s"}\n' "$(json_s "$old")" "$(json_s "$NS")" "$(json_s "$cur")"
+  i=0; cur=""
+  while [ $i -lt 15 ]; do
+    sleep 1
+    cur=$(getprop ro.serialno)
+    [ "$cur" = "$NS" ] && break
+    i=$((i+1))
+  done
+  applied=false
+  [ "$cur" = "$NS" ] && applied=true
+  printf '{"ok":true,"old":"%s","generated":"%s","now":"%s","applied":%s,"waited":%ss}\n' \
+    "$(json_s "$old")" "$(json_s "$NS")" "$(json_s "$cur")" "$applied" "$i"
 }
 
-# 环境隐藏（BL 属性层 + tmp 元数据）
+# ---- 用户操作：环境伪装（只改属性，不生成设备标识）----
 do_hide_env(){
   sh "$MOD_DIR/scripts/envhide.sh" hide-bl 2>/dev/null
   printf '\n'
   sh "$MOD_DIR/scripts/envhide.sh" hide-tmp 2>/dev/null
 }
 
-# 检测对抗总览：读取真实状态 + 各模块装/启状态
+# ---- 只读：检测对抗总览 ----
 do_check(){
   se=$(getenforce 2>/dev/null)
   bl=$(getprop ro.boot.verifiedbootstate)
   lk=$(getprop ro.boot.flash.locked)
-  # root 痕迹
   root=0
   for s in /data/adb/ap /data/adb/ksu /data/adb/magisk; do [ -e "$s" ] && { root=1; break; }; done
-  # su 是否可被 app 看到
   suv="unknown"
   if [ -x /system/bin/su ] || [ -x /system/xbin/su ]; then suv="visible"; else suv="hidden"; fi
-  # frida
   fr=0; ls /data/local/tmp/frida* >/dev/null 2>&1 && fr=1
   ls /data/local/tmp/re.frida.server >/dev/null 2>&1 && fr=1
-  # tmp 元数据
   to=$(stat -c '%U:%G' /data/local/tmp 2>/dev/null)
   tm=$(stat -c '%a' /data/local/tmp 2>/dev/null)
   ti=$(stat -c '%i' /data/local/tmp 2>/dev/null)
-  # 挂载泄漏（对 app 可见的 root 挂载）
   leaks=$(grep -cE 'magisk|KSU|APatch|overlay.*adb/modules' /proc/self/mountinfo 2>/dev/null)
-  # ksu_file 放行情况
   mp=""
   for p in /data/adb/ap/bin/magiskpolicy /data/adb/magisk/magiskpolicy /system/bin/magiskpolicy; do
     [ -x "$p" ] && { mp="$p"; break; }
@@ -118,7 +141,8 @@ do_check(){
     "$(json_s "$to")" "$(json_s "$tm")" "$(json_s "$ti")" "${leaks:-0}" "$kfile"
   printf '"mods":['
   first=1
-  for m in ALING_MAC ALING_Serialno SELinux-LING Shamiko_Service YH_YC zygisk_lsposed zygisksu hma_oss_zygisk playintegrityfix tricky_store ts_enhancer_extreme SoterFix auditpatch lib_tombstone; do
+  for m in ALING_MAC ALING_Serialno SELinux-LING Shamiko_Service YH_YC zygisk_lsposed zygisksu \
+           hma_oss_zygisk playintegrityfix tricky_store ts_enhancer_extreme SoterFix auditpatch lib_tombstone; do
     nm=$(grep -m1 '^name=' "/data/adb/modules/$m/module.prop" 2>/dev/null | cut -d= -f2-)
     [ -z "$nm" ] && continue
     [ $first -eq 0 ] && printf ','
