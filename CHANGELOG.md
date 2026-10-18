@@ -1,5 +1,43 @@
 # 更新日志
 
+## v1.1.0 (2026-10-18)
+
+针对真实反作弊（Duck Detector）检测报告的定向加固。
+
+### 新增：SELinux 策略硬化（`sepolicy.sh`）
+**这是本次最重要的修复。** 实测发现 APatch/KernelSU 的策略生成器会把
+`ksu_file` / `magisk_file` 以 `allow appdomain <type> *` 的形式全量放行
+（ksu_file 覆盖 **107 个 class**，magisk_file 6 个），导致：
+
+```
+untrusted_app -> ksu_file:file read  =  Allowed   ← 反作弊判为 root
+```
+
+任何普通 App 通过 `selinux_check_access` 都能查到。修复：
+- `scan`：统计泄漏规则数
+- `fix`：生成逐 class 的 deny 语句并 `magiskpolicy --live` 热加载（**立即生效，无需重启**）
+- `restore`：从备份还原原始策略
+
+**零风险依据**：磁盘上没有文件实际使用 `ksu_file` 标签
+（APatch 自身用的是 `adb_data_file`），删除规则不影响任何功能。
+实测：107→0，系统 su / pm / SELinux Enforcing 均正常。
+
+### 新增：环境隐藏（`hideenv.sh`）
+基于真机实测暴露项针对性隐藏：
+- `su` 二进制（/system/bin/su 等 6 处）
+- Frida（/data/local/tmp/frida-server 等 5 处）
+- Xposed 静态特征（XposedBridge.jar 等 3 处）
+- 分层设计：默认只隐藏「安全层」，`--aggressive` 才动 root 框架目录
+  （**绝不碰 /data/adb/modules**，那里有 26 个模块）
+
+### 新增：开机自动重应用
+- `auto_hide_env`：开机后自动隐藏环境
+- `auto_sepolicy_fix`：开机后自动硬化 SELinux 策略
+  （内核策略每次重启都会重置，必须开机重跑）
+
+### 修复
+- WebUI 缺失 6 个函数定义（tbHideEnv* / tbSepolicy*）——按钮存在但无实现
+
 ## v1.0.1 (2026-10-17)
 
 第四轮全量审计（剩余脚本逐行）修复。

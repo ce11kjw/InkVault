@@ -236,6 +236,20 @@ footer em{color:var(--accent2);font-style:normal}
       <button class="clean-btn light" onclick="tbHideBl()">隐藏 BL</button>
       <button class="btn-refresh" onclick="tbCheckEnv()">安全检测</button>
     </div>
+    <div class="toolbar">
+      <button class="clean-btn deep" onclick="tbHideEnv()">一键隐藏环境</button>
+      <button class="clean-btn light" onclick="tbHideEnvScan()">扫描暴露项</button>
+      <button class="btn-refresh" onclick="tbHideEnvRestore()">恢复挂载</button>
+    </div>
+    <div id="tb-hideenv"></div>
+
+    <div class="section">SELinux 策略硬化</div>
+    <div id="tb-sepolicy"></div>
+    <div class="toolbar">
+      <button class="clean-btn deep" onclick="tbSepolicyFix()">清除策略泄漏</button>
+      <button class="clean-btn light" onclick="tbSepolicyScan()">检测</button>
+      <button class="btn-refresh" onclick="tbSepolicyRestore()">恢复原策略</button>
+    </div>
   </div>
 
   <!-- 关于我们 -->
@@ -321,7 +335,7 @@ function switchTab(name,btn){
   if(name==='apps'&&allApps.length===0)loadApps();
   if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
   if(name==='clean')loadSettings();
-  if(name==='toolbox'){tbLoadGames();tbLoadFp();}
+  if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();}
   window.scrollTo(0,0);
 }
 function safeParse(txt,fb){try{return JSON.parse(String(txt).trim())}catch(e){return fb||null}}
@@ -693,7 +707,8 @@ function renderSettings(){
   body.innerHTML=
     toggleRow('auto_clean_on_boot','开机自动清理','开机后自动执行一次清理脚本',s.auto_clean_on_boot)+
     toggleRow('auto_clean_on_codev_start','无畏契约启动时清理','检测到游戏启动时自动执行清理',s.auto_clean_on_codev_start)+
-    toggleRow('auto_clean_on_codev_stop','无畏契约结束时清理','检测到游戏退出时自动执行清理',s.auto_clean_on_codev_stop);
+    toggleRow('auto_clean_on_codev_stop','无畏契约结束时清理','检测到游戏退出时自动执行清理',s.auto_clean_on_codev_stop)+
+    toggleRow('auto_hide_env','开机自动隐藏环境','开机后自动隐藏 su/frida/xposed 等反作弊检测点',s.auto_hide_env);
 }
 
 function toggleRow(key,label,desc,val){
@@ -840,6 +855,77 @@ async function tbSysDriver(){
   toast('正在清理驱动/作弊残留…');
   try{var out=await execRoot('sh '+MOD_DIR+'/scripts/sysclean.sh driver');
     var r=tbLastJson(out); toast(r.ok?('完成，清理 '+(r.removed||0)+' 项'):'失败');
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbHideEnvScan(){
+  var box=document.getElementById('tb-hideenv');
+  box.innerHTML='<div class="loader"><div class="spin"></div>扫描中…</div>';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/hideenv.sh scan');
+    var r=tbLastJson(out);
+    function line(k,v){return v?'<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">'+k+'</div><div class="cell-val warn" style="font-size:11px;word-break:break-all">'+tbEsc(v)+'</div></div>':''}
+    var h='';
+    h+=line('SU 二进制',(r.su||'').trim());
+    h+=line('Frida',(r.frida||'').trim());
+    h+=line('Root 框架目录',(r.rootdir||'').trim());
+    h+=line('Xposed 特征',(r.detect||'').trim());
+    h+=line('可疑进程',(r.procs||'').trim());
+    var pp=r.props||{};
+    h+='<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">属性状态</div><div class="cell-val" style="font-size:11px">BL='+tbEsc(pp.bl||'-')+' · locked='+tbEsc(pp.flash||'-')+' · vbmeta='+tbEsc(pp.vbmeta||'-')+'<br>debuggable='+tbEsc(pp.debuggable||'-')+' · type='+tbEsc(pp.type||'-')+'</div></div>';
+    box.innerHTML=h||'<div class="empty-msg">未发现暴露项</div>';
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbHideEnv(){
+  if(!confirm('用 tmpfs 覆盖 su / frida / xposed 等路径，让反作弊扫描不到。\n重启后需重新执行。继续？'))return;
+  toast('正在隐藏环境…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/hideenv.sh apply');
+    var r=tbLastJson(out);
+    toast(r.ok?('已隐藏 '+(r.paths_hidden||0)+' 处路径，改 '+(r.props_changed||0)+' 个属性'):'失败');
+    tbHideEnvScan();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbHideEnvRestore(){
+  toast('正在恢复挂载…');
+  try{
+    await execRoot('sh '+MOD_DIR+'/scripts/hideenv.sh restore');
+    toast('已恢复');tbHideEnvScan();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbSepolicyScan(){
+  var box=document.getElementById('tb-sepolicy');
+  box.innerHTML='<div class="loader"><div class="spin"></div>检测中…</div>';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/sepolicy.sh scan');
+    var r=tbLastJson(out);
+    if(!r.ok){box.innerHTML='<div class="err-msg">'+tbEsc(r.error||'检测失败')+'</div>';return}
+    function row(k,v,bad){return '<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">'+k+'</div><div class="cell-val '+(bad?'warn':'ok')+'" style="font-size:11px">'+tbEsc(v)+'</div></div>'}
+    var h='';
+    h+=row('appdomain → ksu_file', r.ksu_file+' 条规则', r.ksu_file>0);
+    h+=row('appdomain → magisk_file', r.magisk_file+' 条规则', r.magisk_file>0);
+    h+=row('appdomain → lsposed_file', r.lsposed_file+' 条（正常应为 0）', r.lsposed_file>0);
+    h+=row('appdomain → xposed_data', r.xposed_data+' 条（正常应为 0）', r.xposed_data>0);
+    h+=row('总体判定', r.dirty?'存在泄漏，可被反作弊检出':'干净', r.dirty);
+    box.innerHTML=h;
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbSepolicyFix(){
+  if(!confirm('删除 appdomain 对 ksu_file / magisk_file 的全部放行规则。\n\n已验证：磁盘上没有文件使用这些标签，对功能零影响。\n重启后需重跑。继续？'))return;
+  toast('正在清除策略泄漏…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/sepolicy.sh fix');
+    var r=tbLastJson(out);
+    toast(r.ok?('已清除 '+r.applied+' 条规则，立即生效'):('失败：'+(r.error||'')));
+    tbSepolicyScan();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbSepolicyRestore(){
+  if(!confirm('恢复原始 SELinux 策略？\n（反作弊将重新能检出 root）'))return;
+  toast('正在恢复…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/sepolicy.sh restore');
+    var r=tbLastJson(out);
+    toast(r.ok?'已恢复原始策略':'恢复失败');tbSepolicyScan();
   }catch(e){toast('出错：'+(e.message||e))}
 }
 document.addEventListener('DOMContentLoaded',function(){});

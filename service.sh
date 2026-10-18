@@ -29,6 +29,19 @@ chmod 755 "$MODDIR/scripts/"*.sh 2>/dev/null
 sh "$MODDIR/scripts/envhide.sh" hide-bl >/dev/null 2>&1
 log "BL 伪装已重应用"
 
+# 环境隐藏 + SELinux 策略硬化（若开启）
+get_setting_pre() {
+    grep "^$1=" "$SETTINGS_FILE" 2>/dev/null | head -1 | cut -d'=' -f2-
+}
+if [ "$(get_setting_pre auto_hide_env)" = "1" ]; then
+    sh "$MODDIR/scripts/hideenv.sh" apply >/dev/null 2>&1
+    log "环境隐藏已重应用"
+fi
+if [ "$(get_setting_pre auto_sepolicy_fix)" = "1" ]; then
+    sh "$MODDIR/scripts/sepolicy.sh" fix >/dev/null 2>&1
+    log "SELinux 策略硬化已重应用"
+fi
+
 # 1. 应用机型伪装（如果有保存）
 log "执行机型伪装恢复"
 sh "$MODDIR/scripts/spoof.sh" boot_apply >/dev/null 2>&1
