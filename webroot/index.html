@@ -250,6 +250,13 @@ footer em{color:var(--accent2);font-style:normal}
       <button class="clean-btn light" onclick="tbSepolicyScan()">检测</button>
       <button class="btn-refresh" onclick="tbSepolicyRestore()">恢复原策略</button>
     </div>
+
+    <div class="section">隔离容器 (Linux chroot)</div>
+    <div id="tb-chroot"></div>
+    <div class="toolbar">
+      <button class="clean-btn light" onclick="tbChrootStatus()">环境检测</button>
+      <button class="btn-refresh" onclick="tbChrootCheck()">泄漏检查</button>
+    </div>
   </div>
 
   <!-- 关于我们 -->
@@ -335,7 +342,7 @@ function switchTab(name,btn){
   if(name==='apps'&&allApps.length===0)loadApps();
   if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
   if(name==='clean')loadSettings();
-  if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();}
+  if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();}
   window.scrollTo(0,0);
 }
 function safeParse(txt,fb){try{return JSON.parse(String(txt).trim())}catch(e){return fb||null}}
@@ -929,6 +936,35 @@ async function tbSepolicyRestore(){
   }catch(e){toast('出错：'+(e.message||e))}
 }
 document.addEventListener('DOMContentLoaded',function(){});
+async function tbChrootStatus(){
+  var box=document.getElementById('tb-chroot');
+  box.innerHTML='<div class="loader"><div class="spin"></div>检测中…</div>';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot.sh status');
+    var r=tbLastJson(out);
+    if(!r.ok){box.innerHTML='<div class="err-msg">检测失败</div>';return}
+    var ns=r.ns_support||{};
+    function row(k,v,bad){return '<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">'+k+'</div><div class="cell-val '+(bad?'warn':'ok')+'" style="font-size:11px">'+tbEsc(v)+'</div></div>'}
+    var h='';
+    h+=row('挂载命名空间 (MNT_NS)', ns.mnt?'支持':'不支持', !ns.mnt);
+    h+=row('PID 命名空间', ns.pid?'支持':'不支持（不影响隔离）', false);
+    h+=row('User 命名空间', ns.user?'支持':'不支持（不影响隔离）', false);
+    h+=row('make-private 工具', r.make_private?'就绪':'缺失', !r.make_private);
+    h+=row('结论', (r.make_private&&ns.mnt)?'可安全运行隔离容器（挂载不会泄漏）':'环境不满足', !(r.make_private&&ns.mnt));
+    box.innerHTML=h;
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbChrootCheck(){
+  var box=document.getElementById('tb-chroot');
+  box.innerHTML='<div class="loader"><div class="spin"></div>检查中…</div>';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot.sh check');
+    var r=tbLastJson(out);
+    var ok=(r.verdict==='clean');
+    box.innerHTML='<div class="cell wide"><div class="cell-label">挂载泄漏检查</div><div class="cell-val '+(ok?'ok':'warn')+'" style="font-size:12px">'+
+      (ok?'干净：普通应用看不到 chroot 的任何挂载':'发现 '+r.leaked_mounts+' 条可疑挂载（可能泄漏）')+'</div></div>';
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
 </script>
 </body>
 </html>

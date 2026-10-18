@@ -1,5 +1,40 @@
 # 更新日志
 
+## v1.1.1 (2026-10-18)
+
+**隔离式 Linux chroot**：解决了 Mubuntu 等 chroot 模块挂载泄漏被反作弊发现的问题。
+
+### 问题根因（实测定位）
+Android 的 `/` 是 `shared` 传播类型。`unshare -m` 虽然创建了新挂载命名空间，
+但**挂载事件仍会向外传播**到 Android 全局，导致：
+- 普通应用可见 `/data/adb/mubuntu/rootfs/*` 共 10 条挂载
+- Duck Detector 判定 `DANGER: Mount - direct root-managed mount token`
+
+### 解决方案
+```sh
+unshare -m sh -c 'make-private / && mount --bind /dev $ROOTFS/dev && chroot $ROOTFS'
+```
+关键：`mount(NULL, "/", NULL, MS_PRIVATE|MS_REC, NULL)` — 把 root 设为 private，
+阻断挂载事件传播。**toybox 的 mount 不支持传播类型参数**，故自带
+`bin/make-private`（532KB 静态 ARM64 二进制）。
+
+### 实测结果
+```
+启动前 191 条挂载 → 内层 194 条 → 退出后 191 条（零泄漏）
+普通应用视角：0 条可见
+chroot 内：/sdcard 正常、根目录正确切换
+```
+
+### 新增
+- `scripts/chroot.sh` — status / check / run，把任意 rootfs 以隔离方式启动
+- `bin/make-private` — 静态 ARM64 工具，设置挂载传播类型
+- WebUI「隔离容器」区：环境检测 + 泄漏检查
+
+### 内核能力说明
+此内核 `CONFIG_NAMESPACES=y / CONFIG_UTS_NS=y / CONFIG_NET_NS=y`，
+但 **无 `CONFIG_PID_NS` / `CONFIG_USER_NS`**。
+不影响挂载隔离（只需 MNT 命名空间），但无法做 PID 隔离。
+
 ## v1.1.0 (2026-10-18)
 
 针对真实反作弊（Duck Detector）检测报告的定向加固。
