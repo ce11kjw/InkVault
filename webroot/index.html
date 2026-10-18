@@ -159,6 +159,7 @@ footer em{color:var(--accent2);font-style:normal}
   <button class="tab" onclick="switchTab('spoof',this)">机型伪装</button>
   <button class="tab" onclick="switchTab('clean',this)">缓存清理</button>
   <button class="tab" onclick="switchTab('toolbox',this)">工具箱</button>
+  <button class="tab" onclick="switchTab('device',this)">伪装/对抗</button>
   <button class="tab" onclick="switchTab('about',this)">关于我们</button>
 </div>
 
@@ -205,6 +206,28 @@ footer em{color:var(--accent2);font-style:normal}
     </div>
   </div>
 
+
+  <!-- 伪装 / 检测对抗 -->
+  <div class="panel" id="panel-device">
+    <div class="section">设备标识</div>
+    <div id="dv-ids"><div class="loader"><div class="spin"></div>读取中…</div></div>
+    <div class="toolbar">
+      <button class="clean-btn deep" onclick="dvResetMac()">换 MAC</button>
+      <button class="clean-btn deep" onclick="dvResetSn()">换 Serialno</button>
+      <button class="btn-refresh" onclick="dvLoad()">刷新</button>
+    </div>
+
+    <div class="section">环境伪装</div>
+    <div id="dv-env"><div class="loader"><div class="spin"></div>检测中…</div></div>
+    <div class="toolbar">
+      <button class="clean-btn light" onclick="dvHideEnv()">应用 BL 伪装</button>
+      <button class="clean-btn light" onclick="dvSepolicy()">SELinux 硬化</button>
+      <button class="btn-refresh" onclick="dvLoad()">重新检测</button>
+    </div>
+
+    <div class="section">对抗模块状态</div>
+    <div id="dv-mods"><div class="loader"><div class="spin"></div>读取中…</div></div>
+  </div>
 
   <!-- 工具箱（融合 Fish） -->
   <div class="panel" id="panel-toolbox">
@@ -353,6 +376,7 @@ function switchTab(name,btn){
   if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
   if(name==='clean')loadSettings();
   if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();tbWrapList();}
+  if(name==='device')dvLoad();
   window.scrollTo(0,0);
 }
 function safeParse(txt,fb){try{return JSON.parse(String(txt).trim())}catch(e){return fb||null}}
@@ -1018,6 +1042,105 @@ async function tbWrapUninstall(){
     var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot-wrap.sh uninstall '+p);
     var r=tbLastJson(out);
     toast(r.ok?'已还原':'失败');tbWrapList();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+
+/* ===== 伪装 / 检测对抗 ===== */
+function dvEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function dvLastJson(txt){
+  var t=String(txt||'').trim();
+  var i=t.lastIndexOf('\n{');
+  if(i>=0)t=t.slice(i+1);
+  try{return JSON.parse(t)}catch(e){}
+  var m=t.match(/\{[\s\S]*\}/);
+  if(m){try{return JSON.parse(m[0])}catch(e){}}
+  return null;
+}
+function dvCell(label,val,cls){
+  return '<div class="cell"><div class="cell-label">'+dvEsc(label)+'</div><div class="cell-val '+(cls||'')+'">'+dvEsc(val)+'</div></div>';
+}
+async function dvLoad(){
+  var box=document.getElementById('dv-ids');
+  box.innerHTML='<div class="loader"><div class="spin"></div>读取中…</div>';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/device.sh status');
+    var r=dvLastJson(out);
+    if(!r||!r.ok){box.innerHTML='<div class="err-msg">'+dvEsc((r&&r.error)||out)+'</div>';return}
+    var h='';
+    h+=dvCell('Serialno',r.serial,'');
+    h+=dvCell('MAC (wlan0)',r.mac,'');
+    h+=dvCell('Android ID',r.android_id,'');
+    h+=dvCell('机型',r.brand+' '+r.model+(r.marketname&&r.marketname!==r.model?' ('+r.marketname+')':''),'');
+    h+=dvCell('代号',r.device,'');
+    h+=dvCell('Fingerprint',r.fingerprint,'');
+    h+=dvCell('ALING_MAC',r.aling_mac==='enabled'?'已启用':'⚠ '+(r.aling_mac||'缺'),r.aling_mac==='enabled'?'ok':'warn');
+    h+=dvCell('ALING_Serialno',r.aling_sn==='enabled'?'已启用':'⚠ '+(r.aling_sn||'缺'),r.aling_sn==='enabled'?'ok':'warn');
+    h+=dvCell('SELinux-LING',r.aling_selinux==='enabled'?'已启用':'⚠ '+(r.aling_selinux||'缺'),r.aling_selinux==='enabled'?'ok':'warn');
+    box.innerHTML=h;
+  }catch(e){box.innerHTML='<div class="err-msg">'+dvEsc(e.message||e)+'</div>'}
+
+  var ebox=document.getElementById('dv-env');
+  ebox.innerHTML='<div class="loader"><div class="spin"></div>检测中…</div>';
+  var mbox=document.getElementById('dv-mods');
+  mbox.innerHTML='<div class="loader"><div class="spin"></div>读取中…</div>';
+  try{
+    var out2=await execRoot('sh '+MOD_DIR+'/scripts/device.sh check');
+    var c=dvLastJson(out2);
+    if(!c||!c.ok){ebox.innerHTML='<div class="err-msg">'+dvEsc((c&&c.error)||out2)+'</div>';return}
+    var eh='';
+    eh+=dvCell('SELinux',c.selinux,c.selinux==='Enforcing'?'ok':'warn');
+    eh+=dvCell('Bootloader',c.bootloader+' / locked='+c.flash_locked,'');
+    eh+=dvCell('vbmeta',c.vbmeta,'');
+    eh+=dvCell('su 可见性',c.su==='hidden'?'已隐藏':'⚠ 可见',c.su==='hidden'?'ok':'warn');
+    eh+=dvCell('Frida 残留',c.frida==1?'⚠ 发现':'无',c.frida===1?'warn':'ok');
+    eh+=dvCell('/data/local/tmp',c.tmp_owner+' '+c.tmp_mode+' inode='+c.tmp_inode,'');
+    eh+=dvCell('挂载泄漏',(c.mount_leaks|0)===0?'无':(c.mount_leaks+' 条可疑'),(c.mount_leaks|0)===0?'ok':'warn');
+    eh+=dvCell('ksu_file 放行',c.ksu_file_allow<0?'未知':(c.ksu_file_allow===0?'已清零':(c.ksu_file_allow+' 条规则')),c.ksu_file_allow===0?'ok':(c.ksu_file_allow>0?'warn':''));
+    ebox.innerHTML=eh;
+
+    var mods=c.mods||[], mh='';
+    mods.forEach(function(m){
+      var cls=m.state==='enabled'?'ok':'warn';
+      mh+=dvCell(m.name,m.state==='enabled'?'启用':m.state,cls);
+    });
+    mbox.innerHTML=mh||'<div class="empty-msg">未发现相关模块</div>';
+  }catch(e){ebox.innerHTML='<div class="err-msg">'+dvEsc(e.message||e)+'</div>';mbox.innerHTML=''}
+}
+async function dvResetMac(){
+  if(!confirm('换一个新的随机 MAC？\\n（会调 ALING_MAC 的生成逻辑，重启后保持）'))return;
+  toast('正在生成并应用…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/device.sh reset-mac');
+    var r=dvLastJson(out);
+    toast(r&&r.ok?('已换：'+(r.generated||'')):('失败：'+((r&&r.error)||out)));
+    dvLoad();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function dvResetSn(){
+  if(!confirm('换一个新的随机 Serialno？'))return;
+  toast('正在生成并应用…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/device.sh reset-sn');
+    var r=dvLastJson(out);
+    toast(r&&r.ok?('已换：'+(r.now||r.generated||'')):('失败：'+((r&&r.error)||out)));
+    dvLoad();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function dvHideEnv(){
+  toast('正在应用 BL 伪装…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/device.sh hide-env');
+    toast('已应用（属性层）');
+    dvLoad();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function dvSepolicy(){
+  toast('正在硬化 SELinux 策略…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/sepolicy.sh fix');
+    var r=dvLastJson(out);
+    toast(r&&r.ok?'已硬化（立即生效，重启后需重跑）':('失败：'+((r&&r.error)||out)));
+    dvLoad();
   }catch(e){toast('出错：'+(e.message||e))}
 }
 </script>
