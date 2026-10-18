@@ -257,6 +257,16 @@ footer em{color:var(--accent2);font-style:normal}
       <button class="clean-btn light" onclick="tbChrootStatus()">环境检测</button>
       <button class="btn-refresh" onclick="tbChrootCheck()">泄漏检查</button>
     </div>
+
+    <div class="section">chroot 程序垫片（不改源码）</div>
+    <div id="tb-wrap"></div>
+    <div class="toolbar">
+      <button class="clean-btn deep" onclick="tbWrapInstall()">套上隔离垫片</button>
+      <button class="clean-btn light" onclick="tbWrapList()">查看已套</button>
+    </div>
+    <div class="toolbar">
+      <button class="btn-refresh" onclick="tbWrapUninstall()">移除垫片</button>
+    </div>
   </div>
 
   <!-- 关于我们 -->
@@ -342,7 +352,7 @@ function switchTab(name,btn){
   if(name==='apps'&&allApps.length===0)loadApps();
   if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
   if(name==='clean')loadSettings();
-  if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();}
+  if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();tbWrapList();}
   window.scrollTo(0,0);
 }
 function safeParse(txt,fb){try{return JSON.parse(String(txt).trim())}catch(e){return fb||null}}
@@ -964,6 +974,51 @@ async function tbChrootCheck(){
     box.innerHTML='<div class="cell wide"><div class="cell-label">挂载泄漏检查</div><div class="cell-val '+(ok?'ok':'warn')+'" style="font-size:12px">'+
       (ok?'干净：普通应用看不到 chroot 的任何挂载':'发现 '+r.leaked_mounts+' 条可疑挂载（可能泄漏）')+'</div></div>';
   }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbWrapList(){
+  var box=document.getElementById('tb-wrap');
+  box.innerHTML='<div class="loader"><div class="spin"></div>读取中…</div>';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot-wrap.sh list');
+    var r=tbLastJson(out);
+    var list=(r&&r.wrapped)||[];
+    if(!list.length){box.innerHTML='<div class="empty-msg">还没有给任何程序套垫片</div>';return}
+    var h='';
+    list.forEach(function(x){
+      h+='<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">'+tbEsc(x.target)+'</div>'+
+         '<div class="cell-val '+(x.backup_exists?'ok':'warn')+'" style="font-size:11px;word-break:break-all">'+
+         '原程序: '+tbEsc(x.backup)+(x.backup_exists?'':' (丢失!)')+'</div></div>';
+    });
+    box.innerHTML=h;
+  }catch(e){box.innerHTML='<div class="err-msg">'+tbEsc(e.message||e)+'</div>'}
+}
+async function tbWrapInstall(){
+  var p=prompt('要套隔离垫片的程序完整路径（例如 chroot 启动脚本）：\n\n'
+    +'/data/adb/modules/mubuntu/system/bin/mubuntu','');
+  if(!p)return;
+  p=p.trim();
+  if(!/^\/[A-Za-z0-9._\-\/]+$/.test(p)){toast('路径非法，已拦截');return}
+  if(!confirm('将把\n'+p+'\n改名为备份，并在原位置放一个隔离垫片。\n\n原程序不会被修改，随时可移除。继续？'))return;
+  toast('正在套垫片…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot-wrap.sh install '+p);
+    var r=tbLastJson(out);
+    toast(r.ok?('已套上，备份: '+(r.backup||'')):('失败：'+(r.error||'')));
+    tbWrapList();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+async function tbWrapUninstall(){
+  var p=prompt('要移除垫片的程序路径：','');
+  if(!p)return;
+  p=p.trim();
+  if(!/^\/[A-Za-z0-9._\-\/]+$/.test(p)){toast('路径非法，已拦截');return}
+  if(!confirm('移除垫片并还原原程序？\n'+p))return;
+  toast('正在移除…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot-wrap.sh uninstall '+p);
+    var r=tbLastJson(out);
+    toast(r.ok?'已还原':'失败');tbWrapList();
+  }catch(e){toast('出错：'+(e.message||e))}
 }
 </script>
 </body>

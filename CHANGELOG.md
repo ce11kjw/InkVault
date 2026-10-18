@@ -1,5 +1,45 @@
 # 更新日志
 
+## v1.1.2 (2026-10-18)
+
+**chroot 程序垫片** —— 不改任何第三方源码即可隐藏其挂载。
+
+### 背景
+上个版本解决了"自己写 chroot 启动器"的隔离问题，但用户还想用现成的 Mubuntu。
+Mubuntu 的 `mount_chroot()` 直接在全局命名空间里 `mount`，且**源码全程没有 `unshare`**
+⇒ 每次启动必然把 10 条挂载泄漏到 Android 全局。
+
+### 方案：垫片（wrapper shim）
+不改 Mubuntu 一个字节，只在它的入口路径上放一个同名包装器：
+
+```
+原文件 → 改名为 <name>.fusion-orig   （内容完全不变）
+原路径 → 写入垫片：
+         exec chroot-wrap.sh run <备份路径> "$@"
+```
+
+`chroot-wrap.sh run` 的执行链：
+```
+exec unshare -m sh -c '$MKP / && exec <原程序> "$@"'
+```
+
+**对照实测**（同一程序）：
+| | 命名空间 | 调用后挂载 | app 视角泄漏 |
+|---|---|---|---|
+| 经垫片 | mnt:[4026536480]（新） | 189 → **189** | **0** |
+| 直跑原程序 | mnt:[4026534147]（原） | 189 → **190** | 1 |
+
+### 新增
+- `scripts/chroot-wrap.sh` — `run` / `install` / `uninstall` / `list`
+  - install 自动备份原文件（`.fusion-orig`）、保留 SELinux 上下文、写注册表 `/data/adb/fusion/wrapped.list`
+  - uninstall 一键还原
+- WebUI「chroot 程序垫片」区：套上 / 查看 / 移除
+
+### 适用范围
+任何会泄漏挂载的程序，例如：
+- Mubuntu / Ubuntu-Chroot 等 chroot 模块的启动脚本
+- 其他在全局命名空间 `mount` 的工具
+
 ## v1.1.1 (2026-10-18)
 
 **隔离式 Linux chroot**：解决了 Mubuntu 等 chroot 模块挂载泄漏被反作弊发现的问题。
