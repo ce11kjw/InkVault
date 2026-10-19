@@ -706,15 +706,15 @@ async function tbLoadGames(){
   try{
     const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh list');
     var arr=[];try{arr=JSON.parse(String(out).trim())}catch(e){}
-    if(!arr.length){box.innerHTML='<div class="empty-msg">无游戏数据</div>';return}
+    // 只显示已安装的游戏，未安装的直接跳过
+    arr = arr.filter(function(g){ return g.installed });
+    if(!arr.length){box.innerHTML='<div class="empty-msg">没有检测到已安装的游戏</div>';return}
     let h='';
     arr.forEach(function(g){
       h+='<div class="cell wide" style="margin-bottom:8px"><div class="cell-label">'+tbEsc(g.name)+' · '+tbEsc(g.pkg)+'</div>'+
          '<div class="toolbar" style="margin:8px 0 0">'+
-         (g.installed
-           ? '<button class="clean-btn light" onclick="tbClean(\''+g.id+'\',\'light\')">轻度</button>'+
-             '<button class="clean-btn deep" onclick="tbClean(\''+g.id+'\',\'deep\')">深度</button>'
-           : '<span class="cell-val warn">未安装</span>')+
+         '<button class="clean-btn light" onclick="tbClean(\''+g.id+'\',\'light\')">轻度</button>'+
+         '<button class="clean-btn deep" onclick="tbClean(\''+g.id+'\',\'deep\')">深度</button>'+
          '</div></div>';
     });
     box.innerHTML=h;
