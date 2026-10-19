@@ -104,9 +104,32 @@ do_reset_sn(){
     "$(json_s "$old")" "$(json_s "$NS")" "$(json_s "$cur")" "$applied" "$i"
 }
 
-# ---- 用户操作：环境伪装（只改属性，不生成设备标识）----
+# ---- 用户操作：tmp 元数据整理（不生成设备标识）----
+# ---- 只读+补齐：把 Serialno 全属性同步（不生成新值，只复用 ALING 文件里的值）----
+# 背景：ALING_Serialno 只改 ro.serialno 和 ro.boot.chipecid，
+#       漏了 ro.boot.serialno / ro.vendor.oem.serialno（仍是出厂真值），会被检测工具抓到。
+do_sn_full(){
+  F="$ALING_SN/Serialno/TG频道@Whitelist520"
+  [ -f "$F" ] || { printf '{"ok":false,"error":"ALING_Serialno 未安装"}\n'; return 1; }
+  V=$(head -1 "$F" 2>/dev/null)
+  [ -z "$V" ] && { printf '{"ok":false,"error":"目标值为空"}\n'; return 1; }
+  RP=""
+  for p in /data/adb/ap/bin/resetprop /data/adb/magisk/resetprop /system/bin/resetprop; do
+    [ -x "$p" ] && { RP="$p"; break; }
+  done
+  command -v resetprop >/dev/null 2>&1 && [ -z "$RP" ] && RP=resetprop
+  [ -z "$RP" ] && { printf '{"ok":false,"error":"未找到 resetprop"}\n'; return 1; }
+  before=$(getprop ro.boot.serialno)
+  n=0
+  for k in ro.serialno ro.boot.chipecid ro.boot.serialno ro.vendor.oem.serialno; do
+    "$RP" "$k" "$V" 2>/dev/null && n=$((n+1))
+  done
+  printf '{"ok":true,"value":"%s","applied":%d,"before_boot_serialno":"%s","now_boot_serialno":"%s"}\n' \
+    "$(json_s "$V")" "$n" "$(json_s "$before")" "$(json_s "$(getprop ro.boot.serialno)")"
+}
+
 do_hide_env(){
-  sh "$MOD_DIR/scripts/envhide.sh" hide-bl 2>/dev/null
+  # BL 属性伪装已移除（与 TEE attestation 矛盾，反而暴露）
   printf '\n'
   sh "$MOD_DIR/scripts/envhide.sh" hide-tmp 2>/dev/null
 }
@@ -157,7 +180,8 @@ case "$1" in
   reset-mac) do_reset_mac ;;
   reset-sn)  do_reset_sn ;;
   hide-env)  do_hide_env ;;
+  sn-full)   do_sn_full ;;
   check)     do_check ;;
-  *) echo '{"ok":false,"error":"usage: device.sh status|reset-mac|reset-sn|hide-env|check"}' ;;
+  *) echo "{\"ok\":false,\"error\":\"usage: device.sh status|reset-mac|reset-sn|hide-env|sn-full|check\"}" ;;
 esac
 exit 0

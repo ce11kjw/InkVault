@@ -1,0 +1,83 @@
+name: Build InkVault Module
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: ver
+        run: |
+          V=$(grep '^version=' module.prop | cut -d= -f2)
+          echo "version=$V" >> $GITHUB_OUTPUT
+          echo "Detected version: $V"
+
+      - name: Validate shell scripts
+        run: |
+          set -e
+          fail=0
+          for f in scripts/*.sh service.sh; do
+            if sh -n "$f"; then
+              echo "OK   $f"
+            else
+              echo "FAIL $f"; fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Validate module structure
+        run: |
+          set -e
+          test -f module.prop        || { echo "missing module.prop"; exit 1; }
+          test -f service.sh         || { echo "missing service.sh"; exit 1; }
+          test -f webroot/index.html || { echo "missing webroot/index.html"; exit 1; }
+          test -f bin/make-private   || { echo "missing bin/make-private"; exit 1; }
+          grep -q '^id=' module.prop || { echo "module.prop missing id"; exit 1; }
+          echo "Structure OK"
+
+      - name: Build zip
+        run: |
+          set -e
+          V="${{ steps.ver.outputs.version }}"
+          OUT="InkVault-${V}.zip"
+          rm -f *.zip
+          # 排除：git、CI 配置、源码级文档、备份
+          zip -r -q "$OUT" . \
+            -x '.git/*' '.github/*' 'build.sh' 'vendor/*' \
+               '.gitignore' '*.md' '*.bak*' '*.tmp' '*.log'
+          echo "OUT=$OUT" >> $GITHUB_ENV
+          ls -la "$OUT"
+          unzip -l "$OUT" | tail -5
+          sha256sum "$OUT" | tee "$OUT.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: InkVault-${{ steps.ver.outputs.version }}
+          path: |
+            ${{ env.OUT }}
+            ${{ env.OUT }}.sha256
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.OUT }}
+            ${{ env.OUT }}.sha256
+          generate_release_notes: true
+          draft: false

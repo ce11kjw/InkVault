@@ -29,6 +29,14 @@ chmod 755 "$MODDIR/scripts/"*.sh 2>/dev/null
 sh "$MODDIR/scripts/envhide.sh" hide-bl >/dev/null 2>&1
 log "BL 伪装已重应用"
 
+# 补齐 Serialno 全属性（ALING_Serialno 只改了 ro.serialno / ro.boot.chipecid，
+# 漏了 ro.boot.serialno / ro.vendor.oem.serialno，检测工具能读到出厂真值）
+# 只复用 ALING 文件里已有的值，不生成新的
+if [ -d /data/adb/modules/ALING_Serialno ]; then
+    sh "$MODDIR/scripts/device.sh" sn-full >/dev/null 2>&1
+    log "Serialno 全属性已同步"
+fi
+
 # 环境隐藏 + SELinux 策略硬化（若开启）
 get_setting_pre() {
     grep "^$1=" "$SETTINGS_FILE" 2>/dev/null | head -1 | cut -d'=' -f2-
