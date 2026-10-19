@@ -213,6 +213,7 @@ footer em{color:var(--accent2);font-style:normal}
     <div class="toolbar">
       <button class="clean-btn deep" onclick="dvResetMac()">换 MAC</button>
       <button class="clean-btn deep" onclick="dvResetSn()">换 Serialno</button>
+      <button class="clean-btn light" onclick="dvSnFull()">同步 SN 全属性</button>
       <button class="btn-refresh" onclick="dvLoad()">刷新</button>
     </div>
 
@@ -296,7 +297,7 @@ footer em{color:var(--accent2);font-style:normal}
     <div class="about-hero">
       <div class="about-logo">墨</div>
       <div class="about-name">墨匣 InkVault</div>
-      <div class="about-ver">APatch WebUI Module</div>
+      <div class="about-ver" id="about-ver">APatch WebUI Module · 读取版本中…</div>
     </div>
 
     <div class="about-block">
@@ -345,6 +346,7 @@ function switchTab(name,btn){
   if(name==='clean')loadSettings();
   if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();tbWrapList();}
   if(name==='device')dvLoad();
+  if(name==='about')loadAboutVer();
   window.scrollTo(0,0);
 }
 function safeParse(txt,fb){try{return JSON.parse(String(txt).trim())}catch(e){return fb||null}}
@@ -978,7 +980,12 @@ async function dvLoad(){
     h+=dvCell('Serialno',r.serial,r.sn_match?'ok':'');
     if(r.file_sn&&r.file_sn!==r.serial)h+=dvCell('  └ 模块目标值',r.file_sn,'warn');
     h+=dvCell('MAC (wlan0)',r.mac,r.mac_match?'ok':'');
-    if(r.file_mac&&r.file_mac!==r.mac)h+=dvCell('  └ 模块目标值',r.file_mac,'warn');
+    if(r.file_mac&&r.file_mac!==r.mac){
+      h+=dvCell('  └ 模块目标值',r.file_mac,'warn');
+      h+='<div class="cell wide" style="margin-bottom:6px"><div class="cell-val warn" style="font-size:11px;line-height:1.7">'
+        +'⚠ MAC 未生效：系统已对每个 WiFi 启用「随机 MAC」，会覆盖模块设置的值。<br>'
+        +'如需固定，请到 「设置 → WLAN → 当前网络 → 隐私」 改为「使用设备 MAC」。</div></div>';
+    }
     h+=dvCell('Android ID',r.android_id,'');
     h+=dvCell('机型',r.brand+' '+r.model+(r.marketname&&r.marketname!==r.model?' ('+r.marketname+')':''),'');
     h+=dvCell('代号',r.device,'');
@@ -1052,6 +1059,34 @@ async function dvSepolicy(){
     toast(r&&r.ok?'已硬化（立即生效，重启后需重跑）':('失败：'+((r&&r.error)||out)));
     dvLoad();
   }catch(e){toast('出错：'+(e.message||e))}
+}
+async function dvSnFull(){
+  if(!confirm('把 ALING 文件里的 Serialno 同步到全部 4 个属性？\n\n（ro.serialno / ro.boot.chipecid / ro.boot.serialno / ro.vendor.oem.serialno）\n不会生成新值，只复用已有值。'))return;
+  toast('正在同步…');
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/device.sh sn-full');
+    var r=dvLastJson(out);
+    toast(r&&r.ok?('已同步 '+r.applied+' 个属性：'+r.value):('失败：'+((r&&r.error)||out)));
+    dvLoad();
+  }catch(e){toast('出错：'+(e.message||e))}
+}
+/* ===== 关于页：读取真实版本 ===== */
+var aboutVerLoaded=false;
+async function loadAboutVer(){
+  var el=document.getElementById('about-ver');
+  if(!el)return;
+  if(aboutVerLoaded)return;
+  try{
+    var out=await execRoot('cat '+MOD_DIR+'/module.prop');
+    var m=/^version=(.+)$/m.exec(out||'');
+    var c=/^versionCode=(.+)$/m.exec(out||'');
+    var v=m?m[1].trim():'?';
+    var vc=c?c[1].trim():'?';
+    el.textContent='v'+(v.replace(/^v/,''))+'  (code '+vc+')  ·  APatch Module';
+    aboutVerLoaded=true;
+  }catch(e){
+    el.textContent='APatch WebUI Module · 版本读取失败';
+  }
 }
 </script>
 </body>
