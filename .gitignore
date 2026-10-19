@@ -1,4 +1,6 @@
 *.bak
+*.bak-*
 *.tmp
 *.log
 .DS_Store
+vendor/

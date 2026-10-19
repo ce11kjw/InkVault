@@ -4,3 +4,4 @@ version=v1.2.2
 versionCode=122
 author=aplm (based on 呆呆 CITADEL)
 description=游戏清理+设备伪装+检测对抗一体化 | 融合 Fish 工具箱、CITADEL(呆呆)、ALING 设备标识 | WebUI 面板
+updateJson=https://raw.githubusercontent.com/ce11kjw/InkVault/main/update.json

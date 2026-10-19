@@ -48,6 +48,35 @@ jobs:
           grep -q '^id=' module.prop || { echo "module.prop missing id"; exit 1; }
           echo "Structure OK"
 
+      - name: Sync update.json version
+        run: |
+          set -e
+          V=$(grep '^version=' module.prop | cut -d= -f2)
+          C=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          cat > update.json <<JSON
+          {
+            "version": "${V}",
+            "versionCode": ${C},
+            "zipUrl": "https://github.com/ce11kjw/InkVault/releases/latest/download/InkVault.zip",
+            "changelog": "https://raw.githubusercontent.com/ce11kjw/InkVault/main/CHANGELOG.md"
+          }
+          JSON
+          cat update.json
+
+      - name: Commit update.json
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -e
+          if git diff --quiet update.json; then
+            echo "update.json 无变化"
+            exit 0
+          fi
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add update.json
+          git commit -m "chore: sync update.json to $(grep '^version=' module.prop | cut -d= -f2) [skip ci]"
+          git pull --rebase origin main
+          git push
       - name: Build zip
         run: |
           set -e
@@ -58,10 +87,14 @@ jobs:
           zip -r -q "$OUT" . \
             -x '.git/*' '.github/*' 'build.sh' 'vendor/*' \
                '.gitignore' '*.md' '*.bak*' '*.tmp' '*.log'
+          # 固定名副本 → 供 update.json 的 releases/latest/download 使用
+          cp "$OUT" "InkVault.zip"
           echo "OUT=$OUT" >> $GITHUB_ENV
-          ls -la "$OUT"
+          ls -la "$OUT" "InkVault.zip"
           unzip -l "$OUT" | tail -5
-          sha256sum "$OUT" | tee "$OUT.sha256"
+          sha256sum "$OUT" > "$OUT.sha256"
+          sha256sum "InkVault.zip" > "InkVault.zip.sha256"
+          cat "$OUT.sha256"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -79,5 +112,7 @@ jobs:
           files: |
             ${{ env.OUT }}
             ${{ env.OUT }}.sha256
+            InkVault.zip
+            InkVault.zip.sha256
           generate_release_notes: true
           draft: false
