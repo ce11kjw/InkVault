@@ -55,16 +55,11 @@ clean_one(){
 
 case "$1" in
   list)
-    printf '['
-    sep=""
-    while IFS= read -r l; do
-      [ -z "$l" ] && continue
-      id=$(echo "$l" | cut -d'|' -f1); nm=$(echo "$l" | cut -d'|' -f2); pk=$(echo "$l" | cut -d'|' -f3)
-      if installed "$pk"; then ins=true; else ins=false; fi
-      printf '%s{"id":"%s","name":"%s","pkg":"%s","installed":%s}' "$sep" "$id" "$nm" "$pk" "$ins"
-      sep=","
-    done < "$DB"
-    printf ']\n'
+    # 优化：pm 只调一次 + awk 一次生成（原 48 个子进程 ~1594ms -> ~150ms）
+    PMTMP="/data/local/tmp/.games_pm.$$"
+    pm list packages 2>/dev/null > "$PMTMP"
+    awk -f "$D/games-list.awk" "$PMTMP" "$DB"
+    rm -f "$PMTMP"
     ;;
   clean) clean_one "$2" "$3" ;;
   cleanall)

@@ -214,7 +214,7 @@ footer em{color:var(--accent2);font-style:normal}
       <button class="clean-btn deep" onclick="dvResetMac()">换 MAC</button>
       <button class="clean-btn deep" onclick="dvResetSn()">换 Serialno</button>
       <button class="clean-btn light" onclick="dvSnFull()">同步 SN 全属性</button>
-      <button class="btn-refresh" onclick="dvLoad()">刷新</button>
+      <button class="btn-refresh" onclick="ivClearCache();dvLoad();dvLoadAuto()">刷新</button>
     </div>
 
     <div class="section">环境伪装</div>
@@ -222,7 +222,7 @@ footer em{color:var(--accent2);font-style:normal}
     <div class="toolbar">
       <button class="clean-btn light" onclick="dvHideEnv()">应用 BL 伪装</button>
       <button class="clean-btn light" onclick="dvSepolicy()">SELinux 硬化</button>
-      <button class="btn-refresh" onclick="dvLoad()">重新检测</button>
+      <button class="btn-refresh" onclick="ivClearCache();dvLoad()">重新检测</button>
     </div>
 
     <div class="section">自动化</div>
@@ -238,7 +238,7 @@ footer em{color:var(--accent2);font-style:normal}
     <div class="toolbar">
       <button class="clean-btn light" onclick="tbCleanAll('light')">全部轻度清理</button>
       <button class="clean-btn deep" onclick="tbCleanAll('deep')">全部深度清理</button>
-      <button class="btn-refresh" onclick="tbLoadGames()">刷新</button>
+      <button class="btn-refresh" onclick="ivClearCache();tbLoadGames()">刷新</button>
     </div>
     <div id="tb-games"><div class="loader"><div class="spin"></div>读取游戏列表…</div></div>
 
@@ -343,6 +343,26 @@ footer em{color:var(--accent2);font-style:normal}
 <div id="toast"></div>
 
 <script>
+/* ===== 通用加载缓存（减少切页时的重复 execRoot 调用）===== */
+var _ivCache={};
+var IV_CACHE_TTL=30000;   // 30 秒
+
+// 带缓存执行：命中缓存直接返回，过期才真正跑脚本
+async function execCached(key, cmd, ttl){
+  ttl = ttl || IV_CACHE_TTL;
+  var c=_ivCache[key];
+  var now=Date.now();
+  if(c && (now-c.t) < ttl) return c.v;
+  var v=await execRoot(cmd);
+  _ivCache[key]={t:now, v:v};
+  return v;
+}
+// 清缓存（用户点「刷新」时调用）
+function ivClearCache(key){
+  if(key) delete _ivCache[key];
+  else _ivCache={};
+}
+
 let allApps=[];
 let spoofPresets=[];
 let currentSpoof=null;
@@ -358,7 +378,7 @@ function switchTab(name,btn){
   if(name==='apps'&&allApps.length===0)loadApps();
   if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
   if(name==='clean')loadSettings();
-  if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();tbWrapList();}
+  if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();tbWrapList();}  // 各函数内部已并发，互不阻塞
   if(name==='device'){dvLoad();dvLoadAuto();}
   if(name==='about'){loadAboutVer();loadCurVersion();}
   window.scrollTo(0,0);
@@ -405,7 +425,7 @@ async function execRoot(cmd){
 /* ========= 系统信息 ========= */
 async function loadSys(){
   try{
-    const out=await execRoot('sh '+MOD_DIR+'/scripts/sysinfo.sh');
+    const out=await execCached('sysinfo','sh '+MOD_DIR+'/scripts/sysinfo.sh');
     const json=out.trim();
     if(!json)throw new Error('脚本无输出');
     const d=safeParse(json);if(!d)throw new Error('返回数据解析失败');
@@ -456,7 +476,7 @@ async function loadApps(){
   document.getElementById('app-body').style.display='none';
   allApps=[];
   try{
-    const out=await execRoot('sh '+MOD_DIR+'/scripts/ssaid.sh list');
+    const out=await execCached('ssaid','sh '+MOD_DIR+'/scripts/ssaid.sh list');
     const json=out.trim();
     if(!json)throw new Error('脚本无输出');
     const d=safeParse(json);if(!d)throw new Error('返回数据解析失败');
@@ -555,7 +575,7 @@ async function loadSpoof(){
   document.getElementById('spoof-loader').style.display='flex';
   document.getElementById('spoof-body').style.display='none';
   try{
-    const presetOut=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh list');
+    const presetOut=await execCached('spoof','sh '+MOD_DIR+'/scripts/spoof.sh list', 60000);
     const curOut=await execRoot('sh '+MOD_DIR+'/scripts/spoof.sh current');
     const presetData=safeParse(presetOut)||{};
     const curData=safeParse(curOut)||{};
@@ -661,7 +681,7 @@ async function runClean(mode){
 async function loadSettings(){
   const body=document.getElementById('settings-body');
   try{
-    const out=await execRoot('sh '+MOD_DIR+'/scripts/settings.sh get');
+    const out=await execCached('settings','sh '+MOD_DIR+'/scripts/settings.sh get', 60000);
     userSettings=safeParse(out);if(!userSettings)throw new Error('解析失败');
   }catch(e){
     body.innerHTML='<span class="err-msg">读取设置失败</span>';
@@ -720,7 +740,7 @@ async function tbLoadGames(){
   const box=document.getElementById('tb-games');
   box.innerHTML='<div class="loader"><div class="spin"></div>读取游戏列表…</div>';
   try{
-    const out=await execRoot('sh '+MOD_DIR+'/scripts/games.sh list');
+    const out=await execCached('games','sh '+MOD_DIR+'/scripts/games.sh list');
     var arr=[];try{arr=JSON.parse(String(out).trim())}catch(e){}
     // 只显示已安装的游戏，未安装的直接跳过
     arr = arr.filter(function(g){ return g.installed });
@@ -759,7 +779,7 @@ async function tbCleanAll(mode){
 async function tbLoadFp(){
   const box=document.getElementById('tb-fp');
   try{
-    const out=await execRoot('sh '+MOD_DIR+'/scripts/fp.sh status');
+    const out=await execCached('fp','sh '+MOD_DIR+'/scripts/fp.sh status', 60000);
     var r=tbLastJson(out);
     box.innerHTML='<div class="cell wide"><div class="cell-label">当前指纹</div><div class="cell-val">'+tbEsc(r.fingerprint||'—')+'</div></div>'+
       '<div class="cell wide" style="margin-top:8px"><div class="cell-label">设备序列号</div><div class="cell-val">'+tbEsc(r.serial||'—')+'</div>'+
@@ -861,7 +881,7 @@ async function tbSepolicyScan(){
   var box=document.getElementById('tb-sepolicy');
   box.innerHTML='<div class="loader"><div class="spin"></div>检测中…</div>';
   try{
-    var out=await execRoot('sh '+MOD_DIR+'/scripts/sepolicy.sh scan');
+    var out=await execCached('sepolicy','sh '+MOD_DIR+'/scripts/sepolicy.sh scan', 60000);
     var r=tbLastJson(out);
     if(!r.ok){box.innerHTML='<div class="err-msg">'+tbEsc(r.error||'检测失败')+'</div>';return}
     function row(k,v,bad){return '<div class="cell wide" style="margin-bottom:6px"><div class="cell-label">'+k+'</div><div class="cell-val '+(bad?'warn':'ok')+'" style="font-size:11px">'+tbEsc(v)+'</div></div>'}
@@ -898,7 +918,7 @@ async function tbChrootStatus(){
   var box=document.getElementById('tb-chroot');
   box.innerHTML='<div class="loader"><div class="spin"></div>检测中…</div>';
   try{
-    var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot.sh status');
+    var out=await execCached('chroot','sh '+MOD_DIR+'/scripts/chroot.sh status', 60000);
     var r=tbLastJson(out);
     if(!r.ok){box.innerHTML='<div class="err-msg">检测失败</div>';return}
     var ns=r.ns_support||{};
@@ -927,7 +947,7 @@ async function tbWrapList(){
   var box=document.getElementById('tb-wrap');
   box.innerHTML='<div class="loader"><div class="spin"></div>读取中…</div>';
   try{
-    var out=await execRoot('sh '+MOD_DIR+'/scripts/chroot-wrap.sh list');
+    var out=await execCached('wrap','sh '+MOD_DIR+'/scripts/chroot-wrap.sh list', 60000);
     var r=tbLastJson(out);
     var list=(r&&r.wrapped)||[];
     if(!list.length){box.innerHTML='<div class="empty-msg">还没有给任何程序套垫片</div>';return}
@@ -987,7 +1007,7 @@ async function dvLoad(){
   var box=document.getElementById('dv-ids');
   box.innerHTML='<div class="loader"><div class="spin"></div>读取中…</div>';
   try{
-    var out=await execRoot('sh '+MOD_DIR+'/scripts/device.sh status');
+    var out=await execCached('dv_status','sh '+MOD_DIR+'/scripts/device.sh status');
     var r=dvLastJson(out);
     if(!r||!r.ok){box.innerHTML='<div class="err-msg">'+dvEsc((r&&r.error)||out)+'</div>';return}
     var h='';
@@ -1015,7 +1035,7 @@ async function dvLoad(){
   var mbox=document.getElementById('dv-mods');
   mbox.innerHTML='<div class="loader"><div class="spin"></div>读取中…</div>';
   try{
-    var out2=await execRoot('sh '+MOD_DIR+'/scripts/device.sh check');
+    var out2=await execCached('dv_check','sh '+MOD_DIR+'/scripts/device.sh check', 60000);
     var c=dvLastJson(out2);
     if(!c||!c.ok){ebox.innerHTML='<div class="err-msg">'+dvEsc((c&&c.error)||out2)+'</div>';return}
     var eh='';
@@ -1044,7 +1064,7 @@ async function dvLoadAuto(){
   if(!box)return;
   box.innerHTML='<div class="loader"><div class="spin"></div>读取设置…</div>';
   try{
-    var out=await execRoot('sh '+MOD_DIR+'/scripts/settings.sh get');
+    var out=await execCached('settings','sh '+MOD_DIR+'/scripts/settings.sh get', 60000);
     dvSettings=safeParse(out)||{};
   }catch(e){
     box.innerHTML='<div class="err-msg">读取设置失败</div>';
