@@ -157,9 +157,16 @@ do_check(){
   for p in /data/adb/ap/bin/magiskpolicy /data/adb/magisk/magiskpolicy /system/bin/magiskpolicy; do
     [ -x "$p" ] && { mp="$p"; break; }
   done
+  # 优化：30 秒缓存 + 正确的目标域（untrusted_app* 而非 appdomain）
   kfile=-1
-  if [ -n "$mp" ]; then
-    kfile=$("$mp" --load /sys/fs/selinux/policy --print-rules 2>/dev/null | grep -cE '^allow appdomain ksu_file ')
+  KCACHE="/data/local/tmp/.iv_sepolicy_cache"
+  if [ -f "$KCACHE" ]; then
+    kage=$(( $(date +%s) - $(stat -c %Y "$KCACHE" 2>/dev/null || echo 0) ))
+    [ "$kage" -lt 30 ] && kfile=$(cat "$KCACHE" 2>/dev/null)
+  fi
+  if [ "$kfile" = "-1" ] && [ -n "$mp" ]; then
+    kfile=$("$mp" --load /sys/fs/selinux/policy --print-rules 2>/dev/null | grep -cE '^allow (appdomain|untrusted_app[A-Za-z0-9_]*) ksu_file ')
+    printf '%s' "$kfile" > "$KCACHE" 2>/dev/null
   fi
   printf '{"ok":true,"selinux":"%s","bootloader":"%s","flash_locked":"%s","root":"%s","su":"%s","frida":%s,' \
     "$(json_s "$se")" "$(json_s "$bl")" "$(json_s "$lk")" "$([ $root -eq 1 ] && echo true || echo false)" \
@@ -167,15 +174,32 @@ do_check(){
   printf '"tmp_owner":"%s","tmp_mode":"%s","tmp_inode":"%s","mount_leaks":%s,"ksu_file_allow":%s,' \
     "$(json_s "$to")" "$(json_s "$tm")" "$(json_s "$ti")" "${leaks:-0}" "$kfile"
   printf '"mods":['
-  first=1
-  for m in ALING_MAC ALING_Serialno SELinux-LING Shamiko_Service YH_YC zygisk_lsposed zygisksu \
-           hma_oss_zygisk playintegrityfix tricky_store ts_enhancer_extreme SoterFix auditpatch lib_tombstone; do
-    nm=$(grep -m1 '^name=' "/data/adb/modules/$m/module.prop" 2>/dev/null | cut -d= -f2-)
-    [ -z "$nm" ] && continue
-    [ $first -eq 0 ] && printf ','
-    first=0
-    printf '{"id":"%s","name":"%s","state":"%s"}' "$(json_s $m)" "$(json_s "$nm")" "$(mod_state $m)"
+  MTMP="/data/local/tmp/.iv_mods.$$"
+  : > "$MTMP"
+  for m in ALING_MAC ALING_Serialno SELinux-LING Shamiko_Service YH_YC zygisk_lsposed zygisksu hma_oss_zygisk playintegrityfix tricky_store ts_enhancer_extreme SoterFix auditpatch lib_tombstone; do
+    f="/data/adb/modules/$m/module.prop"
+    [ -f "$f" ] || continue
+    st="enabled"
+    [ -f "/data/adb/modules/$m/disable" ] && st="disabled"
+    [ -f "/data/adb/modules/$m/remove" ] && st="removing"
+    printf '%s\t%s\t%s\n' "$m" "$f" "$st" >> "$MTMP"
   done
+  awk -F'\t' '
+    BEGIN { first = 1 }
+    {
+      id=$1; f=$2; st=$3; nm="";
+      while ((getline line < f) > 0) {
+        if (line ~ /^name=/) { sub(/^name=/,"",line); nm=line; break }
+      }
+      close(f)
+      if (nm=="") next
+      gsub(/"/, "", nm)
+      if (!first) printf ","
+      first = 0
+      printf "{\"id\":\"%s\",\"name\":\"%s\",\"state\":\"%s\"}", id, nm, st
+    }
+  ' "$MTMP"
+  rm -f "$MTMP"
   printf ']}\n'
 }
 
