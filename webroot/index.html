@@ -225,6 +225,9 @@ footer em{color:var(--accent2);font-style:normal}
       <button class="btn-refresh" onclick="dvLoad()">重新检测</button>
     </div>
 
+    <div class="section">自动化</div>
+    <div id="dv-auto"><div class="loader"><div class="spin"></div>读取设置…</div></div>
+
     <div class="section">对抗模块状态</div>
     <div id="dv-mods"><div class="loader"><div class="spin"></div>读取中…</div></div>
   </div>
@@ -356,7 +359,7 @@ function switchTab(name,btn){
   if(name==='spoof'&&spoofPresets.length===0)loadSpoof();
   if(name==='clean')loadSettings();
   if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();tbWrapList();}
-  if(name==='device')dvLoad();
+  if(name==='device'){dvLoad();dvLoadAuto();}
   if(name==='about'){loadAboutVer();loadCurVersion();}
   window.scrollTo(0,0);
 }
@@ -1033,6 +1036,62 @@ async function dvLoad(){
     });
     mbox.innerHTML=mh||'<div class="empty-msg">未发现相关模块</div>';
   }catch(e){ebox.innerHTML='<div class="err-msg">'+dvEsc(e.message||e)+'</div>';mbox.innerHTML=''}
+}
+/* ===== 自动化开关（SELinux 自动修复 / 开机隐藏环境）===== */
+var dvSettings={};
+async function dvLoadAuto(){
+  var box=document.getElementById('dv-auto');
+  if(!box)return;
+  box.innerHTML='<div class="loader"><div class="spin"></div>读取设置…</div>';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/settings.sh get');
+    dvSettings=safeParse(out)||{};
+  }catch(e){
+    box.innerHTML='<div class="err-msg">读取设置失败</div>';
+    return;
+  }
+  dvRenderAuto();
+}
+function dvRenderAuto(){
+  var box=document.getElementById('dv-auto');
+  if(!box)return;
+  var seOn=(dvSettings.auto_sepolicy_fix==='1');
+  var envOn=(dvSettings.auto_hide_env==='1');
+  box.innerHTML=
+    '<div class="toggle-row">'+
+      '<div class="toggle-info">'+
+        '<div class="toggle-label">开机自动修复 SELinux</div>'+
+        '<div class="toggle-desc">每次开机自动清除 appdomain 对 ksu_file / magisk_file 的放行规则（Duck Detector 会读这个判断 root）</div>'+
+      '</div>'+
+      '<div class="toggle-switch'+(seOn?' on':'')+'" onclick="dvToggle(\'auto_sepolicy_fix\',this)"></div>'+
+    '</div>'+
+    '<div class="toggle-row">'+
+      '<div class="toggle-info">'+
+        '<div class="toggle-label">开机自动隐藏环境</div>'+
+        '<div class="toggle-desc">开机后自动隐藏 su / frida / xposed 等反作弊检测点</div>'+
+      '</div>'+
+      '<div class="toggle-switch'+(envOn?' on':'')+'" onclick="dvToggle(\'auto_hide_env\',this)"></div>'+
+    '</div>';
+}
+async function dvToggle(key,el){
+  var cur = key==='auto_sepolicy_fix' ? dvSettings.auto_sepolicy_fix : dvSettings.auto_hide_env;
+  var next = (cur==='1') ? '0' : '1';
+  try{
+    var out=await execRoot('sh '+MOD_DIR+'/scripts/settings.sh set '+key+' '+next);
+    var r=safeParse(out);
+    if(r&&r.ok){
+      if(key==='auto_sepolicy_fix') dvSettings.auto_sepolicy_fix=next;
+      else dvSettings.auto_hide_env=next;
+      if(next==='1') el.classList.add('on'); else el.classList.remove('on');
+      toast(next==='1'?'已开启':'已关闭');
+      if(key==='auto_sepolicy_fix'&&next==='1'){
+        toast('正在立即执行一次 SELinux 硬化…');
+        setTimeout(function(){dvSepolicy();},600);
+      }
+    }else{
+      toast('设置失败：'+((r&&r.error)||out));
+    }
+  }catch(e){toast('出错：'+(e.message||e))}
 }
 async function dvResetMac(){
   if(!confirm('换一个新的随机 MAC？\\n（会调 ALING_MAC 的生成逻辑，重启后保持）'))return;
