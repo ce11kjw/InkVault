@@ -307,6 +307,17 @@ footer em{color:var(--accent2);font-style:normal}
     </div>
 
     <div class="about-block">
+      <div class="about-title">版本更新</div>
+      <div class="about-info-row"><span class="k">当前版本</span><span class="v" id="upd-cur">读取中…</span></div>
+      <div class="about-info-row"><span class="k">最新版本</span><span class="v" id="upd-latest">未检查</span></div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="clean-btn light" onclick="checkUpdate()">检查更新</button>
+        <button class="btn-refresh" onclick="openReleasePage()">打开 Release 页</button>
+      </div>
+      <div id="upd-note" class="about-disclaimer" style="margin-top:10px;font-size:11px"></div>
+    </div>
+
+    <div class="about-block">
       <div class="about-title">免责声明</div>
       <div class="about-disclaimer">
         <p>1. 本模块为<em>免费开源工具</em>，代码托管于 GitHub，仅供学习与技术研究使用，<em>禁止任何形式的商业转售</em>。</p>
@@ -346,7 +357,7 @@ function switchTab(name,btn){
   if(name==='clean')loadSettings();
   if(name==='toolbox'){tbLoadGames();tbLoadFp();tbSepolicyScan();tbChrootStatus();tbWrapList();}
   if(name==='device')dvLoad();
-  if(name==='about')loadAboutVer();
+  if(name==='about'){loadAboutVer();loadCurVersion();}
   window.scrollTo(0,0);
 }
 function safeParse(txt,fb){try{return JSON.parse(String(txt).trim())}catch(e){return fb||null}}
@@ -1087,6 +1098,68 @@ async function loadAboutVer(){
   }catch(e){
     el.textContent='APatch WebUI Module · 版本读取失败';
   }
+}
+/* ===== 版本更新检查 ===== */
+var UPDATE_JSON='https://raw.githubusercontent.com/ce11kjw/InkVault/main/update.json';
+var RELEASE_PAGE='https://github.com/ce11kjw/InkVault/releases/latest';
+var curCode=0, curVer='';
+
+async function loadCurVersion(){
+  try{
+    var out=await execRoot('cat '+MOD_DIR+'/module.prop');
+    var m=/^version=(.+)$/m.exec(out||'');
+    var c=/^versionCode=(.+)$/m.exec(out||'');
+    curVer=m?m[1].trim():'?';
+    curCode=c?parseInt(c[1].trim(),10):0;
+    var e1=document.getElementById('upd-cur');
+    if(e1)e1.textContent=curVer+' ('+curCode+')';
+  }catch(e){}
+}
+
+async function checkUpdate(){
+  var e1=document.getElementById('upd-cur');
+  var e2=document.getElementById('upd-latest');
+  var note=document.getElementById('upd-note');
+  if(!e2)return;
+  await loadCurVersion();
+  if(e1)e1.textContent=curVer+' ('+curCode+')';
+  e2.textContent='检查中…';
+  if(note)note.innerHTML='';
+  var txt='';
+  // 优先 fetch（WebView 环境通常可用），失败再走 curl
+  try{
+    var r=await fetch(UPDATE_JSON+'?t='+Date.now(),{cache:'no-store'});
+    if(r.ok)txt=await r.text();
+  }catch(e){}
+  if(!txt){
+    try{ txt=await execRoot('curl -sL --max-time 10 "'+UPDATE_JSON+'" 2>/dev/null'); }catch(e){}
+  }
+  if(!txt||txt.indexOf('versionCode')<0){
+    e2.textContent='检查失败';
+    if(note)note.innerHTML='<span style="color:var(--warning,#f59e0b)">无法访问 GitHub，请检查网络或代理。</span>';
+    return;
+  }
+  var nc=0, nv='?';
+  var mc=/"?versionCode"?\s*:\s*(\d+)/.exec(txt);
+  var mv=/"?version"?\s*:\s*"([^"]+)"/.exec(txt);
+  if(mc)nc=parseInt(mc[1],10);
+  if(mv)nv=mv[1];
+  e2.textContent=nv+' ('+nc+')';
+  if(nc>curCode){
+    e2.className='v ok';
+    if(note)note.innerHTML='<span style="color:var(--accent2,#22d3ee)">发现新版本！当前 '+curCode+' → 最新 '+nc+'。<br>'
+      +'请到模块管理器点「更新」，或访问 Release 页面下载。</span>';
+  }else{
+    e2.className='v ok';
+    if(note)note.innerHTML='<span style="color:var(--accent2,#22d3ee)">已是最新版本 ✅</span>';
+  }
+}
+
+function openReleasePage(){
+  try{
+    execRoot('am start -a android.intent.action.VIEW -d "'+RELEASE_PAGE+'"');
+    toast('正在打开浏览器…');
+  }catch(e){toast('打开失败：'+(e.message||e))}
 }
 </script>
 </body>

@@ -1,7 +1,8 @@
 id=webui_info
 name=墨匣 InkVault
-version=v1.3.3
-versionCode=133
+version=v1.3.4
+versionCode=134
 author=aplm
 description=游戏清理 + 设备伪装 + 检测对抗一体化面板。整合 Fish 工具箱、CITADEL、ALING 设备标识等公开方案。
 updateJson=https://raw.githubusercontent.com/ce11kjw/InkVault/main/update.json
+actionIcon=icon.png
