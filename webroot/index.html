@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-<title>CITADEL</title>
+<title>墨匣 InkVault</title>
 <style>
 :root{--bg:#0a0a0f;--surf:#111118;--card:#16161f;--border:#232330;--accent:#5b8af0;--accent2:#a78bfa;--green:#34d399;--orange:#fb923c;--red:#f87171;--text:#e2e2f0;--muted:#55556a;--mono:'JetBrains Mono','Courier New',monospace;--sans:'PingFang SC','Noto Sans SC',-apple-system,sans-serif}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -147,10 +147,9 @@ footer em{color:var(--accent2);font-style:normal}
 <div class="topbar">
   <div class="topbar-icon">CT</div>
   <div>
-    <div class="topbar-title">CITADEL Menu</div>
-    <div class="topbar-sub">KernelSU Module · 呆呆工作室</div>
+    <div class="topbar-title">墨匣 InkVault</div>
+    <div class="topbar-sub">APatch Module · aplm</div>
   </div>
-  <div class="topbar-author">QQ <em>891354018</em></div>
 </div>
 
 <div class="tabbar">
@@ -295,65 +294,36 @@ footer em{color:var(--accent2);font-style:normal}
   <!-- 关于我们 -->
   <div class="panel" id="panel-about">
     <div class="about-hero">
-      <div class="about-logo">CT</div>
-      <div class="about-name">CITADEL Menu</div>
-      <div class="about-ver">KernelSU WebUI Module</div>
+      <div class="about-logo">墨</div>
+      <div class="about-name">墨匣 InkVault</div>
+      <div class="about-ver">APatch WebUI Module</div>
     </div>
 
     <div class="about-block">
       <div class="about-title">作者信息</div>
-      <div class="about-info-row"><span class="k">作者</span><span class="v">呆呆</span></div>
-      <div class="about-info-row"><span class="k">作者 QQ</span><span class="v">891354018</span></div>
-      <div class="about-info-row"><span class="k">交流群</span><span class="v">774886621</span></div>
-      <div class="about-info-row"><span class="k">工作室</span><span class="v">呆呆工作室</span></div>
+      <div class="about-info-row"><span class="k">作者</span><span class="v">aplm</span></div>
+      <div class="about-info-row"><span class="k">来源</span><span class="v">github.com/ce11kjw/InkVault</span></div>
     </div>
 
     <div class="about-block">
       <div class="about-title">免责声明</div>
       <div class="about-disclaimer">
-        <p>1. 本模块为 <em>免费工具</em>，仅供学习交流使用。任何商业用途请联系作者授权。</p>
-        <p>2. 使用本模块产生的<em>任何后果由用户自行承担</em>，包括但不限于账号封禁、设备异常、数据丢失等。</p>
-        <p>3. 本模块所有功能<em>不针对任何特定平台或服务</em>，仅提供系统级信息查询与本地数据管理能力。</p>
-        <p>4. 严禁将本模块用于<em>违法违规</em>行为，开发者不承担因不当使用产生的法律责任。</p>
-        <p>5. 本模块<em>不收集、不上传</em>任何用户数据，所有操作均在本地完成。</p>
-        <p>6. 如不同意以上条款，请立即停止使用并卸载本模块。</p>
+        <p>1. 本模块为<em>免费开源工具</em>，代码托管于 GitHub，仅供学习与技术研究使用，<em>禁止任何形式的商业转售</em>。</p>
+        <p>2. 本模块会修改<em>系统属性、SELinux 策略、网络设备地址</em>并清理应用缓存目录。这些操作具有不可逆性，请在明确了解后果后使用。</p>
+        <p>3. 部分功能（设备标识、环境伪装）会影响应用对设备的识别结果。<em>由此导致的账号异常、封禁、数据丢失等后果，由使用者自行承担。</em></p>
+        <p>4. 请勿将本模块用于<em>违反当地法律法规</em>或侵犯他人权益的场景。开发者不对使用者的具体用途负责。</p>
+        <p>5. 本模块<em>不含任何统计、埋点或数据上传</em>。所有操作均在设备本地完成；联网行为仅限于访问 GitHub 检查更新与拉取源码。</p>
+        <p>6. 本模块基于 CITADEL（呆呆）、Fish 工具箱、ALING 等公开方案整合改造，感谢原作者的开源贡献。</p>
+        <p>7. 如不同意以上条款，请立即停止使用并卸载本模块。</p>
       </div>
     </div>
 
-    <div class="about-block">
-      <div class="about-title">查看公告</div>
-      <button class="about-btn" onclick="popupNotice()" style="margin-bottom:10px;background:var(--surf);border:1px solid var(--border);color:var(--text)">查看官方公告</button>
-    </div>
-
-    <div class="about-block">
-      <div class="about-title">加入交流</div>
-      <div class="about-disclaimer" style="margin-bottom:14px">加入官方交流群获取最新版本、使用教程、问题反馈与互助交流。</div>
-      <button class="about-btn" onclick="joinQQGroup()">加入 QQ 交流群</button>
-    </div>
   </div>
 
 </div>
 
-<footer>CITADEL Info Panel · 作者: <em>呆呆</em> · QQ <em>891354018</em> · 群 <em>774886621</em></footer>
+<footer>墨匣 InkVault · by aplm</footer>
 
-<!-- 公告弹窗 -->
-<div class="modal-mask" id="modal-mask">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-icon">CT</div>
-      <div>
-        <div class="modal-title">官方公告</div>
-        <div class="modal-sub">CITADEL Notice</div>
-      </div>
-    </div>
-    <div class="modal-body loading" id="modal-body">
-      <div class="spin" style="margin:0 auto 10px"></div>正在拉取公告…
-    </div>
-    <div class="modal-footer">
-      <button class="modal-btn primary" onclick="closeModal()">我已阅读</button>
-    </div>
-  </div>
-</div>
 
 <div id="toast"></div>
 
@@ -363,8 +333,6 @@ let spoofPresets=[];
 let currentSpoof=null;
 let userSettings={};
 const MOD_DIR='/data/adb/modules/webui_info';
-const NOTICE_URL='https://gitee.com/island-style/daoshi/raw/master/%E5%85%AC%E5%91%8A.txt';
-const QQ_GROUP_URL='https://qm.qq.com/q/wirF6nC2wU';
 
 function toast(msg,dur){dur=dur||2500;const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(function(){el.classList.remove('show')},dur)}
 function switchTab(name,btn){
@@ -417,62 +385,6 @@ async function execRoot(cmd){
   throw new Error('未检测到 KernelSU/Suki/APatch WebUI 环境');
 }
 
-/* ========= 公告 ========= */
-let noticeLoaded=false;
-let noticeContent='';
-
-async function fetchNotice(){
-  try{
-    const r=await fetch(NOTICE_URL+'?t='+Date.now(),{cache:'no-store'});
-    if(r.ok){const txt=await r.text();if(txt)return txt}
-  }catch(e){}
-  try{
-    const out=await execRoot('curl -sL --max-time 8 "'+NOTICE_URL+'" 2>/dev/null || wget -qO- --timeout=8 "'+NOTICE_URL+'" 2>/dev/null');
-    if(out&&out.trim())return out.trim();
-  }catch(e){}
-  throw new Error('无法获取公告，请检查网络');
-}
-
-async function loadNoticeContent(force){
-  const modalBody=document.getElementById('modal-body');
-  if(!force&&noticeLoaded&&noticeContent){
-    modalBody.textContent=noticeContent;
-    modalBody.classList.remove('loading');
-    return;
-  }
-  modalBody.innerHTML='<div class="spin" style="margin:0 auto 10px"></div>正在拉取公告…';
-  modalBody.classList.add('loading');
-  try{
-    let txt=await fetchNotice();
-    txt=txt.replace(/\\n/g,'\n').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\u2028|\u2029|\u0085/g,'\n').trim();
-    noticeContent=txt;noticeLoaded=true;
-    modalBody.textContent=txt;
-    modalBody.classList.remove('loading');
-  }catch(e){
-    modalBody.innerHTML='<span class="err-msg">加载失败<br>'+esc(e.message||e)+'</span>';
-    modalBody.classList.add('loading');
-  }
-}
-
-function popupNotice(){
-  document.getElementById('modal-mask').classList.add('show');
-  loadNoticeContent(false);
-}
-function closeModal(){document.getElementById('modal-mask').classList.remove('show')}
-
-/* ========= 加群 ========= */
-async function joinQQGroup(){
-  toast('正在打开浏览器…');
-  try{
-    await execRoot('am start -a android.intent.action.VIEW -d "'+QQ_GROUP_URL+'"');
-    setTimeout(function(){toast('已跳转到浏览器')},800);
-  }catch(e){
-    if(navigator.clipboard){
-      try{await navigator.clipboard.writeText(QQ_GROUP_URL);toast('打开失败，链接已复制')}
-      catch(err){toast('请手动复制：'+QQ_GROUP_URL)}
-    }
-  }
-}
 
 /* ========= 系统信息 ========= */
 async function loadSys(){
@@ -778,11 +690,7 @@ async function toggleSetting(key,el){
 
 // 启动
 loadSys();
-setTimeout(popupNotice,300);
 
-document.getElementById('modal-mask').addEventListener('click',function(e){
-  if(e.target===this)closeModal();
-});
 
 /* ========= 工具箱（融合 Fish） ========= */
 function tbEsc(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
