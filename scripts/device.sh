@@ -145,10 +145,17 @@ do_check(){
   lk=$(getprop ro.boot.flash.locked)
   root=0
   for s in /data/adb/ap /data/adb/ksu /data/adb/magisk; do [ -e "$s" ] && { root=1; break; }; done
+  # v1.4.1 修 su 假阳性：原实现用 root shell 判 -x /system/bin/su，root 永远能看到
+  #   （APatch 的 /data/adb/ap/su_path 就指着它）=> 恒报 visible。改以普通 app 视角实测。
   suv="unknown"
-  if [ -x /system/bin/su ] || [ -x /system/xbin/su ]; then suv="visible"; else suv="hidden"; fi
-  fr=0; ls /data/local/tmp/frida* >/dev/null 2>&1 && fr=1
-  ls /data/local/tmp/re.frida.server >/dev/null 2>&1 && fr=1
+  _su_uid=10500
+  if [ -x /system/bin/su ] || [ -x /system/xbin/su ]; then
+    if su $_su_uid sh -c "ls /system/bin/su" >/dev/null 2>&1 || su $_su_uid sh -c "ls /system/xbin/su" >/dev/null 2>&1; then suv="visible"; else suv="hidden"; fi
+  else
+    suv="hidden"
+  fi
+  # v1.4.1 修 frida 假阳性：只认真实文件（-s 非空），0 字节 chmod 000 占位不算残留
+  fr=0; for f in /data/local/tmp/frida-server /data/local/tmp/frida-server16 /data/local/tmp/re.frida.server /data/local/tmp/frida /data/local/tmp/hluda_server; do [ -s "$f" ] && fr=1; done
   to=$(stat -c '%U:%G' /data/local/tmp 2>/dev/null)
   tm=$(stat -c '%a' /data/local/tmp 2>/dev/null)
   ti=$(stat -c '%i' /data/local/tmp 2>/dev/null)

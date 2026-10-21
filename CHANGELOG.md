@@ -1,5 +1,60 @@
 # 更新日志
 
+## v1.4.1 (2026-10-22)
+
+### 🔴 修复：激进隐藏会把 LSPosed 打死（严重）
+
+**现象**：点了环境隐藏的「激进模式」之后，LSPosed 管理器直接失联，
+模块作用域丢失，日志狂刷：
+```
+E/LSPosed: Failed with No such file or directory(2): open /data/adb/lspd/monitor
+```
+
+**根因**：`PATHS_RISKY` 里包含 `/data/adb/lspd`，激进模式对其执行
+```
+mount -t tmpfs -o mode=000 tmpfs /data/adb/lspd
+```
+把真实目录整个遮住 —— 而 LSPosed 的配置就存在 `/data/adb/lspd/config/*.db`。
+LSPosed 读不到自己的配置，自然就废了。
+
+**修复**：从 `PATHS_RISKY` 移除 `/data/adb/lspd`。
+LSPosed 必须能读到自己的配置才能工作，藏它本身没有意义；
+痕迹隐藏交给 Shamiko / HMA 更专业。
+
+> 已经中招的：`umount /data/adb/lspd` 即可恢复（真实数据一直都在，只是被遮住）。
+
+### 🟡 修复：`su` 检测恒报 visible（假阳性）
+
+原实现用 **root shell** 判断：
+```sh
+[ -x /system/bin/su ] && suv="visible"
+```
+但 APatch 的 `/data/adb/ap/su_path` 本来就指着 `/system/bin/su`，
+root 视角永远看得见 ⇒ 永远报 visible，与实际暴露面无关。
+
+**修复**：先 root 视角初判，再用**非白名单普通 UID** 复核（真能在普通 app 视角 ls 到才算泄漏）。
+实测修复后 `su: visible → hidden`（pathhide 本来是生效的，只是检测方法错了）。
+
+### 🟡 修复：`frida` 检测把 0 字节占位当残留（假阳性）
+
+隐藏机制是「mv 到 stash + 空文件占位 + chmod 000」，
+但检测用 `ls /data/local/tmp/frida*` ⇒ 占位文件也让 `frida=1`。
+
+**修复**：改用 `[ -s "$f" ]` 判非空，只认真实文件。
+实测修复后 `frida: 1 → 0`。
+
+### 📋 本版净效果（K60 Ultra / APatch 115357 真机实测）
+
+| 字段 | 修复前 | 修复后 |
+|---|---|---|
+| `su` | visible ❌ | **hidden** ✅ |
+| `frida` | 1 ❌ | **0** ✅ |
+| `mount_leaks` | 0 | 0 ✅ |
+| LSPosed | 失联 ❌ | **正常** ✅ |
+
+---
+
+
 ## v1.4.0 (2026-10-21)
 
 ### 🔴 修复：路径隐藏完全失效（严重）

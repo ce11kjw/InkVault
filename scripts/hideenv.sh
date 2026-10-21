@@ -26,7 +26,10 @@ PATHS_SAFE_DETECT='/system/framework/XposedBridge.jar /system/lib/libxposed_art.
 # ===== 谨慎层：默认不隐藏，需显式 --aggressive =====
 # ⚠️ /data/adb/modules 里有 26 个模块（Shamiko/tricky_store/playintegrityfix 等），
 #    覆盖它会让模块管理器看不到模块，而且本模块自己也在里面 —— 绝不动！
-PATHS_RISKY='/data/adb/ap /data/adb/apd /data/adb/magisk /data/adb/ksu /data/adb/lspd'
+# v1.4.1: 移除 /data/adb/lspd —— 遮挡会让 LSPosed 读不到自己的 config/*.db
+#   症状: open /data/adb/lspd/monitor: No such file + Manager 失联 (2026-10-22 真机实测)
+#   LSPosed 必须能读到配置才能工作；痕迹隐藏交给 Shamiko/HMA
+PATHS_RISKY='/data/adb/ap /data/adb/apd /data/adb/magisk /data/adb/ksu'
 
 # ---- 需要隐藏的进程名（仅用于展示）----
 HIDE_PROCS='apd|magiskd|ksud|frida-server|frida-server16|zygiskd|lspd'

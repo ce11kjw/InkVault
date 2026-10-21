@@ -84,7 +84,8 @@ check_env(){
   for su in /system/bin/su /system/xbin/su /data/adb/magisk /data/adb/ap /data/adb/ksu; do
     [ -e "$su" ] && { root=1; break; }
   done
-  frida=0; ls /data/local/tmp/frida* >/dev/null 2>&1 && frida=1
+  # v1.4.1: 只认真实文件（-s 判非空），0 字节 chmod 000 占位不算残留
+  frida=0; for f in /data/local/tmp/frida-server /data/local/tmp/frida-server16 /data/local/tmp/re.frida.server /data/local/tmp/frida /data/local/tmp/hluda_server; do [ -s "$f" ] && frida=1; done
   xposed=0; [ -e /system/framework/XposedBridge.jar ] && xposed=1
   emu=0; [ "$(getprop ro.kernel.qemu)" = "1" ] && emu=1
   to=$(stat -c '%U:%G' /data/local/tmp 2>/dev/null); tm=$(stat -c '%a' /data/local/tmp 2>/dev/null)
