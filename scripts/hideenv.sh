@@ -56,35 +56,79 @@ hide_props() {
   echo "$n"
 }
 
-# ---- 用 mount 覆盖隐藏文件/目录（最有效，反作弊 readdir/stat 都看不到）----
+# ---- 用 mount 覆盖隐藏文件/目录 ----
+#
+# v1.4.0 重要修正：
+#   原实现 `mount -o bind /dev/null <file>` 在 Android 上必定失败：
+#     mount: '/dev/null'->'/system/bin/su': No such file or directory
+#     losetup: /dev/block/loop43=/dev/null: Invalid argument
+#   因为 toybox mount 把 bind 源当 loop 设备处理，/dev/null 不是块设备。
+#   而且 / 是 erofs (ro)，无法 remount rw。
+#
+# 可行方案（实测）：
+#   A. tmpfs 覆盖【目录】           mount -t tmpfs tmpfs <dir>   OK
+#   B. /data 下【文件】移走 + 空占位 mv + touch + chmod 000      OK
+#   C. /system 下【文件】           只读分区，脚本层无法隐藏      SKIP
+#
+# 因此本版：目录用 tmpfs，/data 文件用移走占位，
+# /system 文件明确报告 skipped 并提示需要内核方案。
 hide_paths() {
-  hidden=0; failed=0
+  hidden=0; failed=0; skipped=0
+  HIDE_STASH="/data/adb/.inkvault_stash"
   local list="$PATHS_SAFE_SU $PATHS_SAFE_FRIDA $PATHS_SAFE_DETECT"
   [ "$1" = "aggressive" ] && list="$list $PATHS_RISKY"
+
   for p in $list; do
     [ -e "$p" ] || continue
+
     if [ -d "$p" ]; then
-      # 目录：挂 tmpfs 覆盖（保留目录本身，内容为空）
-      if mount -t tmpfs tmpfs "$p" 2>/dev/null; then
+      if mountpoint -q "$p" 2>/dev/null; then
+        hidden=$((hidden+1))
+      elif mount -t tmpfs -o mode=000 tmpfs "$p" 2>/dev/null; then
         hidden=$((hidden+1))
       else
         failed=$((failed+1))
       fi
-    else
-      # 文件：绑定一个不存在的空文件？→ 用 /dev/null 覆盖（read 返回空）
-      if mount -o bind /dev/null "$p" 2>/dev/null; then
-        hidden=$((hidden+1))
-      else
-        failed=$((failed+1))
-      fi
+      continue
     fi
+
+    case "$p" in
+      /data/*)
+        mkdir -p "$HIDE_STASH" 2>/dev/null
+        bak="$HIDE_STASH/$(echo "$p" | tr '/' '_')"
+        if [ -f "$bak" ]; then
+          hidden=$((hidden+1))
+        elif mv "$p" "$bak" 2>/dev/null; then
+          touch "$p" 2>/dev/null
+          chmod 000 "$p" 2>/dev/null
+          chown root:root "$p" 2>/dev/null
+          hidden=$((hidden+1))
+        else
+          failed=$((failed+1))
+        fi
+        ;;
+      *)
+        skipped=$((skipped+1))
+        log "SKIP: $p 在只读分区，脚本层无法隐藏"
+        ;;
+    esac
   done
-  echo "$hidden $failed"
+  echo "$hidden $failed $skipped"
 }
 
 unhide_paths() {
+  HIDE_STASH="/data/adb/.inkvault_stash"
   for p in $PATHS_SAFE_SU $PATHS_SAFE_FRIDA $PATHS_SAFE_DETECT $PATHS_RISKY; do
     mountpoint -q "$p" 2>/dev/null && umount "$p" 2>/dev/null
+    case "$p" in
+      /data/*)
+        bak="$HIDE_STASH/$(echo "$p" | tr '/' '_')"
+        if [ -f "$bak" ]; then
+          rm -f "$p" 2>/dev/null
+          mv "$bak" "$p" 2>/dev/null
+        fi
+        ;;
+    esac
   done
 }
 
@@ -112,9 +156,9 @@ case "$1" in
     nprop=$(hide_props)
     MODE="safe"; [ "$2" = "--aggressive" ] && MODE="aggressive"
     set -- $(hide_paths "$MODE")
-    log "apply: props=$nprop hidden=$1 failed=$2"
-    printf '{"ok":true,"props_changed":%s,"paths_hidden":%s,"paths_failed":%s,"note":"重启后需重跑"}\n' \
-      "$nprop" "$1" "$2"
+    log "apply: props=$nprop hidden=$1 failed=$2 skipped=$3"
+    printf '{"ok":true,"props_changed":%s,"paths_hidden":%s,"paths_failed":%s,"paths_skipped":%s,"note":"只读分区文件无法脚本层隐藏，需内核方案"}\n' \
+      "$nprop" "$1" "$2" "$3"
     ;;
   restore)
     unhide_paths

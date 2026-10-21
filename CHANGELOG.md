@@ -1,5 +1,44 @@
 # 更新日志
 
+## v1.4.0 (2026-10-21)
+
+### 🔴 修复：路径隐藏完全失效（严重）
+
+**现象**：`hideenv.sh apply` 始终返回 `hidden=0 failed=3`，三个路径无一隐藏成功。
+
+**根因**（手机实测）：
+```
+mount: '/dev/null'->'/system/bin/su': No such file or directory
+losetup: /dev/block/loop43=/dev/null: Invalid argument
+```
+1. Android toybox 的 `mount -o bind` 把源当 **loop 设备**处理，
+   `/dev/null` 不是块设备 ⇒ 直接失败
+2. `/` 是 **erofs 只读**，无法 remount rw
+
+**修复**：按路径类型分三种策略
+| 类型 | 方法 | 效果 |
+|---|---|---|
+| 目录（/data/adb/ap 等） | `mount -t tmpfs -o mode=000` | ✅ 内容清空，卸载后恢复 |
+| /data 下文件（frida-server） | `mv` 到 `/data/adb/.inkvault_stash` + 空文件占位 + chmod 000 | ✅ 6B/644 → 0B/000，读取为空 |
+| /system 下文件（su、XposedBridge.jar） | **无法隐藏**（只读分区） | ⚠️ 明确报告 skipped，提示需内核方案 |
+
+**实测验证**（真机 K60 Ultra / APatch）：
+- `/data/local/tmp/_test.bin`：6 bytes → 0 bytes，`cat` 返回空 ✅
+- `/data/local/tmp/_testdir`：tmpfs 覆盖后目录为空，umount 后恢复 ✅
+
+**注意**：`/system/bin/su`（334KB）在 APatch 下是真实文件且在只读分区，
+**脚本层无法隐藏**。要隐藏它需要：
+- SUSFS（KernelSU 模块）
+- Shamiko（Zygisk 模块）
+- 或用 `mount -t overlay` 做只读覆盖（需内核支持）
+
+### 变更
+- `hide_paths()` 重写（60 行 → 66 行，含详尽注释）
+- `unhide_paths()` 同步支持恢复 stash 文件
+- `apply` 输出新增 `paths_skipped` 字段
+- 新增 `/data/adb/.inkvault_stash/` 作为隐藏文件暂存区
+
+
 ## v1.1.2 (2026-10-18)
 
 **chroot 程序垫片** —— 不改任何第三方源码即可隐藏其挂载。
